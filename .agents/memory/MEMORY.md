@@ -1,1 +1,2 @@
 - [Companion product decisions](companion-product.md) — approved visual fidelity, home-first audience, specialist navigation handoff and opt-in preferences.
+- [Expo package release timing](expo-release-timing.md) — SDK-matched package updates may be blocked until the workspace release-age window passes; don't bypass it.

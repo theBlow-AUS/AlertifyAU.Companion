@@ -7,11 +7,6 @@
     "icon": "./assets/images/companion-icon.png",
     "scheme": "alertify-companion",
     "userInterfaceStyle": "light",
-    "splash": {
-      "image": "./assets/images/companion-icon.png",
-      "backgroundColor": "#1b2b37",
-      "resizeMode": "contain"
-    },
     "ios": {
       "supportsTablet": false,
       "infoPlist": { "LSApplicationQueriesSchemes": ["comgooglemaps", "waze"] }
@@ -24,6 +19,7 @@
     "plugins": [
       "expo-router",
       "expo-background-task",
+      ["expo-splash-screen", { "image": "./assets/images/companion-icon.png", "backgroundColor": "#1b2b37", "resizeMode": "contain" }],
       ["expo-location", { "locationWhenInUsePermission": "Alertify.au Companion uses your location only when you choose to save home or select a trip starting point." }],
       ["expo-notifications", { "defaultChannel": "default", "color": "#287bb6" }]
     ],
