@@ -1,0 +1,1 @@
+- [Companion product decisions](companion-product.md) — approved visual fidelity, home-first audience, specialist navigation handoff and opt-in preferences.

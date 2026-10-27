@@ -1,0 +1,24 @@
+kind = "mobile"
+previewPath = "/"
+title = "Alertify.au Companion"
+description = "Native Alertify companion for saved-home incident monitoring, official incident details, configurable alerts, and trip handoff to Google Maps or Waze. Preserves the approved Alertify visual identity."
+version = "1.0.0"
+id = "artifacts/alertify-companion"
+router = "expo-domain"
+
+[[services]]
+name = "expo"
+ensurePreviewReachable = "/status"
+paths = [ "/" ]
+localPort = 18326
+
+[services.development]
+run = "pnpm --filter @workspace/alertify-companion run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/alertify-companion", "run", "build" ]
+run = [ "pnpm", "--filter", "@workspace/alertify-companion", "run", "serve" ]
+
+[services.env]
+PORT = "18326"
+BASE_PATH = "/"

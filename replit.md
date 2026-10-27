@@ -1,6 +1,6 @@
-# [Project name]
+# Alertify.au Companion
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+Native Expo companion for watching a saved home area, viewing NSW RFS incidents and handing trips off to Google Maps or Waze.
 
 ## Run & Operate
 
@@ -30,7 +30,12 @@ _Populate as you build — non-obvious choices a reader couldn't infer from the 
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+- `artifacts/alertify-companion/` is the native Expo app. Run its managed `artifacts/alertify-companion: expo` workflow.
+- Approved visual references remain in `artifacts/mockup-sandbox/src/components/mockups/alertify-mobile/`.
+- Public data: NSW RFS major incidents, Open-Meteo weather, Nominatim address search, OSRM driving route estimates. No private Alertify API or Google/Waze traffic feed is connected.
+- Preferences, home coordinates and active trip estimates are stored locally using AsyncStorage. No account is required.
+- Local notifications check for new incidents or warning-level changes while open; optional native background tasks are best-effort and system-scheduled. This is not a guaranteed emergency alert service or a remote push backend.
+- Incident proximity uses reported points, not fire perimeters. All source links, error states, cache ages and route-estimate limitations must remain visible.
 
 ## User preferences
 
