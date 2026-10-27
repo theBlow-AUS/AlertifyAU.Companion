@@ -13,7 +13,10 @@ import * as SplashScreen from 'expo-splash-screen';
 import * as Notifications from 'expo-notifications';
 import { CompanionProvider } from '@/contexts/CompanionContext';
 import colors from '@/constants/colors';
+import { setBaseUrl } from '@workspace/api-client-react';
 
+const apiDomain = process.env.EXPO_PUBLIC_DOMAIN;
+if (apiDomain) setBaseUrl(apiDomain.startsWith('http') ? apiDomain : `https://${apiDomain}`);
 void SplashScreen.preventAutoHideAsync();
 const queryClient = new QueryClient();
 function RootLayoutNav() {

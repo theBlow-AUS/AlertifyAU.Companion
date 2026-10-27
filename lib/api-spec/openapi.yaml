@@ -11,6 +11,59 @@ tags:
   - name: health
     description: Health operations
 paths:
+  /companion/weather:
+    get:
+      operationId: getCompanionWeather
+      tags: [companion]
+      summary: Point-scoped Xweather via Alertify and RainViewer radar metadata
+      parameters:
+        - name: points
+          in: query
+          required: true
+          description: One to five lat,lon pairs separated by semicolons
+          schema: { type: string, maxLength: 240 }
+      responses:
+        "200":
+          description: Weather source availability, observations and geometries
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CompanionWeather" }
+        "400":
+          description: Invalid coordinates or too many sample points
+  /companion/fire-district:
+    get:
+      operationId: getCompanionFireDistrict
+      tags: [companion]
+      summary: Match a map pin to the NSW RFS fire-weather area using Alertify council boundaries
+      parameters:
+        - name: latitude
+          in: query
+          required: true
+          schema: { type: number, minimum: -90, maximum: 90 }
+        - name: longitude
+          in: query
+          required: true
+          schema: { type: number, minimum: -180, maximum: 180 }
+      responses:
+        "200":
+          description: Boundary match and district status, including no-match and outage states
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FireDistrictMatch" }
+        "400":
+          description: Invalid coordinates
+  /companion/feeds:
+    get:
+      operationId: getCompanionFeeds
+      tags: [companion]
+      summary: Alertify public fire ratings and hazard feeds
+      responses:
+        "200":
+          description: Per-source status and normalized public data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CompanionFeeds"
   /healthz:
     get:
       operationId: healthCheck
@@ -26,6 +79,149 @@ paths:
                 $ref: "#/components/schemas/HealthStatus"
 components:
   schemas:
+    FireDistrictMatch:
+      type: object
+      required: [status, lga, district, error, fetchedAt]
+      properties:
+        status: { type: string, enum: [matched, ambiguous, outside_nsw, unavailable, stale] }
+        lga: { type: ["string", "null"] }
+        district: { type: ["string", "null"] }
+        error: { type: ["string", "null"] }
+        fetchedAt: { type: string }
+    WeatherSource:
+      type: object
+      required: [id, name, status, error, availablePoints, requestedPoints, fetchedAt]
+      properties:
+        id: { type: string, enum: [lightning, hail, wind, rain] }
+        name: { type: string }
+        status: { type: string, enum: [live, partial, stale, unavailable] }
+        error: { type: ["string", "null"] }
+        availablePoints: { type: integer }
+        requestedPoints: { type: integer }
+        fetchedAt: { type: string }
+    WeatherEvent:
+      type: object
+      required: [id, kind, latitude, longitude, polygon, description, validFrom, validTo]
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [lightning, hail] }
+        latitude: { type: ["number", "null"] }
+        longitude: { type: ["number", "null"] }
+        polygon:
+          type: array
+          items:
+            type: array
+            items:
+              type: array
+              items: { type: number }
+        description: { type: string }
+        validFrom: { type: string }
+        validTo: { type: string }
+    WeatherSample:
+      type: object
+      required: [latitude, longitude, windTime, windSpeedKph, windGustKph, windDirection, rainTime, rainEnd, rain60minMm, rainPeakMmH, currentRainMmH]
+      properties:
+        latitude: { type: number }
+        longitude: { type: number }
+        windTime: { type: string }
+        windSpeedKph: { type: ["number", "null"] }
+        windGustKph: { type: ["number", "null"] }
+        windDirection: { type: string }
+        rainTime: { type: string }
+        rainEnd: { type: string }
+        rain60minMm: { type: ["number", "null"] }
+        rainPeakMmH: { type: ["number", "null"] }
+        currentRainMmH: { type: ["number", "null"] }
+    RadarFrame:
+      type: object
+      required: [time, path]
+      properties:
+        time: { type: number }
+        path: { type: string }
+    WeatherRadar:
+      type: object
+      required: [status, error, generatedAt, host, frames]
+      properties:
+        status: { type: string, enum: [live, stale, unavailable] }
+        error: { type: ["string", "null"] }
+        generatedAt: { type: string }
+        host: { type: string }
+        frames:
+          type: array
+          items: { $ref: "#/components/schemas/RadarFrame" }
+    CompanionWeather:
+      type: object
+      required: [fetchedAt, sources, events, samples, radar]
+      properties:
+        fetchedAt: { type: string }
+        sources:
+          type: array
+          items: { $ref: "#/components/schemas/WeatherSource" }
+        events:
+          type: array
+          items: { $ref: "#/components/schemas/WeatherEvent" }
+        samples:
+          type: array
+          items: { $ref: "#/components/schemas/WeatherSample" }
+        radar: { $ref: "#/components/schemas/WeatherRadar" }
+    FireDistrict:
+      type: object
+      required: [name, today, tomorrow, totalFireBan, checkedAt, councils]
+      properties:
+        name: { type: string }
+        today: { type: string }
+        tomorrow: { type: string }
+        totalFireBan: { type: ["boolean", "null"] }
+        checkedAt: { type: string }
+        councils:
+          type: array
+          items: { type: string }
+    HazardReport:
+      type: object
+      required: [id, title, category, description, location, updatedAt, sourceUrl, latitude, longitude, severity]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        category: { type: string }
+        description: { type: string }
+        location: { type: string }
+        updatedAt: { type: string }
+        sourceUrl: { type: string }
+        latitude: { type: ["number", "null"] }
+        longitude: { type: ["number", "null"] }
+        severity: { type: integer }
+    HazardSource:
+      type: object
+      required: [id, name, status, error, fetchedAt, updatedAt, reports]
+      properties:
+        id: { type: string, enum: [tfnsw, bom, ses] }
+        name: { type: string }
+        status: { type: string, enum: [live, partial, stale, unavailable] }
+        error: { type: ["string", "null"] }
+        fetchedAt: { type: ["string", "null"] }
+        updatedAt: { type: ["string", "null"] }
+        reports:
+          type: array
+          items: { $ref: "#/components/schemas/HazardReport" }
+    FireRatings:
+      type: object
+      required: [status, error, fetchedAt, updatedAt, districts]
+      properties:
+        status: { type: string, enum: [live, stale, unavailable] }
+        error: { type: ["string", "null"] }
+        fetchedAt: { type: ["string", "null"] }
+        updatedAt: { type: ["string", "null"] }
+        districts:
+          type: array
+          items: { $ref: "#/components/schemas/FireDistrict" }
+    CompanionFeeds:
+      type: object
+      required: [fireRatings, sources]
+      properties:
+        fireRatings: { $ref: "#/components/schemas/FireRatings" }
+        sources:
+          type: array
+          items: { $ref: "#/components/schemas/HazardSource" }
     HealthStatus:
       type: object
       properties:

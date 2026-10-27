@@ -9,6 +9,7 @@ import { currentPlace } from '@/lib/location';
 import { estimateRoute, searchPlaces } from '@/lib/services';
 import { openNavigation } from '@/lib/navigation';
 import { type NavigationApp, type Place, type RouteEstimate, navigationUrl, routeDistance, timeAgo } from '@/lib/model';
+import { WeatherAssessment } from '@/components/weather/WeatherAssessment';
 
 export default function Trips() {
   const c = useColors();
@@ -57,7 +58,7 @@ export default function Trips() {
     <View style={ui.card}>
       <Text style={ui.label}>Starting point</Text><Text style={ui.h2}>{start?.name ?? 'Choose a starting point'}</Text>{start && <Text style={ui.small}>{start.detail}</Text>}
       <Button title="Use my current location" icon="navigation" secondary busy={busy === 'location'} disabled={!!busy && busy !== 'location'} onPress={() => void locate()} />
-      {settings.home && <Pressable onPress={() => { setStart(settings.home); setEstimate(null); }} style={{ paddingVertical: 8 }}><Text style={{ color: c.primary, fontFamily: fonts.bold, fontSize: 13 }}>Start from saved home</Text></Pressable>}
+      {settings.watches.map(w => <Pressable key={w.id} onPress={() => { setStart(w.place); setEstimate(null); }} style={{ paddingVertical: 8 }}><Text style={{ color: c.primary, fontFamily: fonts.bold, fontSize: 13 }}>Start from {w.label}</Text></Pressable>)}
     </View>
     <View style={{ gap: 10 }}>
       <Text style={ui.h2}>Where are you heading?</Text>
@@ -70,12 +71,13 @@ export default function Trips() {
     {!!error && <Notice error>{error}</Notice>}
     {shownRoute && <View style={{ gap: 14 }}>
       <Diagram coordinates={shownRoute.coordinates} points={[shownRoute.start, shownRoute.destination]} />
-      <Notice>Incident coverage is NSW RFS only. Interstate route segments are not assessed by this version.</Notice>
+      <Notice>RFS incident coverage is NSW only. Weather is checked separately at query points along this estimate; neither makes an interstate route fully assessed.</Notice>
       <View style={ui.spread}><Text style={ui.h2}>{Math.round(shownRoute.distance)} km estimated</Text><Text style={ui.small}>{Math.round(shownRoute.duration)} min · no live traffic</Text></View>
       <Notice>Estimate from the public OSRM routing service, based on OpenStreetMap. Google Maps or Waze may choose a different route. Alertify does not receive their live routes or traffic reports.</Notice>
       <View style={ui.spread}><Text style={ui.h2}>Along this route estimate</Text><Text style={ui.small}>5 km corridor</Text></View>
-      {isStale ? <Notice error>Incident data is unavailable or stale. No current route assessment can be made.</Notice> : <View style={[ui.card, { paddingVertical: nearby.length ? 0 : 16 }]}>{nearby.length ? nearby.map(i => <IncidentRow key={i.id} incident={i} subtitle={`${i.category} · ${routeDistance(i, shownRoute.coordinates).toFixed(1)} km from estimated route`} />) : <><Text style={ui.h2}>No RFS reports in this corridor</Text><Text style={ui.small}>This is not a safety assessment. Road closures, floods, weather warnings and traffic are not checked.</Text></>}</View>}
+      {isStale ? <Notice error>Incident data is unavailable or stale. No current RFS assessment can be made.</Notice> : <View style={[ui.card, { paddingVertical: nearby.length ? 0 : 16 }]}>{nearby.length ? nearby.map(i => <IncidentRow key={i.id} incident={i} subtitle={`${i.category} · ${routeDistance(i, shownRoute.coordinates).toFixed(1)} km from estimated route`} />) : <><Text style={ui.h2}>No RFS reports in this corridor</Text><Text style={ui.small}>This is not a safety assessment. Review the separate sampled-weather checks below; road closures, flood areas and live traffic are not fully assessed.</Text></>}</View>}
       <Text style={ui.small}>Route calculated {timeAgo(shownRoute.calculatedAt)}. Proximity is measured to reported incident points, not fire perimeters.</Text>
+      <WeatherAssessment route={shownRoute} />
     </View>}
     <View style={{ gap: 12 }}><Text style={ui.h2}>Trip alert sensitivity</Text><Sensitivity value={settings.tripLevel} onChange={tripLevel => void saveSettings({ tripLevel }).catch(reportError)} /><Text style={ui.small}>Home Watch sensitivity is kept separate.</Text></View>
     <View style={{ gap: 12 }}>

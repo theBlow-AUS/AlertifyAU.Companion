@@ -1,9 +1,32 @@
 export type Level = 'urgent' | 'significant' | 'all';
 export type NavigationApp = 'Google Maps' | 'Waze';
+export type AlertHazardKey = 'rfs' | 'fireDanger' | 'tfnsw' | 'bom' | 'ses' | 'lightning' | 'hail' | 'wind' | 'rain';
+export type AlertHazards = Record<AlertHazardKey, boolean>;
+export const defaultAlertHazards: AlertHazards = {
+  rfs: true, fireDanger: true, tfnsw: true, bom: true, ses: true,
+  lightning: true, hail: true, wind: true, rain: true,
+};
+const legacyAlertHazards: AlertHazards = { ...defaultAlertHazards, fireDanger: false, tfnsw: false, bom: false, ses: false, lightning: false, hail: false, wind: false, rain: false };
+export const alertHazardOptions: { key: AlertHazardKey; label: string; detail: string }[] = [
+  { key: 'rfs', label: 'NSW RFS incidents', detail: 'Uses Home and Trip sensitivity.' },
+  { key: 'fireDanger', label: 'Fire danger rating changes', detail: 'A pin’s district rating or total fire ban changes.' },
+  { key: 'tfnsw', label: 'TfNSW live hazards', detail: 'Reports need a mapped location near a watch zone or trip.' },
+  { key: 'bom', label: 'BOM NSW warnings', detail: 'The current feed is statewide and not geocoded.' },
+  { key: 'ses', label: 'NSW SES HazardWatch', detail: 'Only reports with a usable location can be matched.' },
+  { key: 'lightning', label: 'Xweather lightning', detail: 'Strikes matched to a watch zone or trip.' },
+  { key: 'hail', label: 'Xweather hail threats', detail: 'Forecast areas intersecting a watch zone or trip.' },
+  { key: 'wind', label: 'Xweather strong wind', detail: 'Gusts at or above 90 km/h; advisory threshold.' },
+  { key: 'rain', label: 'Xweather heavy rain', detail: 'Forecast peak rate at or above 20 mm/h; advisory threshold.' },
+];
 export type Place = { name: string; detail: string; latitude: number; longitude: number };
+export type WatchAddress = {
+  id: string; label: string; place: Place; radius: number; enabled: boolean;
+};
 export type Settings = {
   home: Place | null; radius: number; watch: boolean;
+  watches: WatchAddress[]; activeWatchId: string | null;
   homeLevel: Level; tripLevel: Level; navigationApp: NavigationApp | null;
+  alertHazards: AlertHazards;
   notifications: boolean; background: boolean;
   quietHours: boolean; quietStart: number; quietEnd: number;
 };
@@ -24,9 +47,31 @@ export const FEED_KEY = 'alertify.feed.v1';
 export const MONITOR_KEY = 'alertify.monitor.v1';
 export const defaultSettings: Settings = {
   home: null, radius: 10, watch: true, homeLevel: 'significant',
+  watches: [], activeWatchId: null,
   tripLevel: 'significant', navigationApp: null, notifications: false, background: false,
+  alertHazards: defaultAlertHazards,
   quietHours: false, quietStart: 22, quietEnd: 7,
 };
+export function normalizeSettings(raw: Partial<Settings>): Settings {
+  const base = { ...defaultSettings, ...raw };
+  const alertHazards = raw.alertHazards && typeof raw.alertHazards === 'object'
+    ? { ...defaultAlertHazards, ...raw.alertHazards }
+    : legacyAlertHazards;
+  const watches = Array.isArray(raw.watches) ? raw.watches : raw.home
+    ? [{ id: 'saved-home', label: 'Home', place: raw.home, radius: raw.radius || 10, enabled: true }]
+    : [];
+  // Older builds stored a manually chosen district. Strip it: fire weather
+  // areas now follow the address pin matched against Alertify's LGA boundaries.
+  const migratedWatches = watches.map(w => {
+    const { fireDistrict: _legacyDistrict, ...watch } = w as WatchAddress & { fireDistrict?: string | null };
+    return watch;
+  });
+  if (migratedWatches.some(w => !w.id || !w.label || !w.place || !Number.isFinite(w.place.latitude) || !Number.isFinite(w.place.longitude) || !Number.isFinite(w.radius) || w.radius <= 0)) {
+    throw new Error('A saved watch address is invalid. Existing saved data has not been overwritten.');
+  }
+  const active = migratedWatches.find(w => w.id === raw.activeWatchId) ?? migratedWatches[0];
+  return { ...base, alertHazards, watches: migratedWatches, activeWatchId: active?.id ?? null, home: active?.place ?? null, radius: active?.radius ?? 10 };
+}
 export const levels: { value: Level; label: string; detail: string }[] = [
   { value: 'urgent', label: 'Urgent only', detail: 'Emergency Warnings only.' },
   { value: 'significant', label: 'Significant', detail: 'Watch and Act plus Emergency Warnings.' },

@@ -5,8 +5,10 @@ import { Feather } from '@expo/vector-icons';
 import { useCompanion } from '@/contexts/CompanionContext';
 import { Button, Notice, Screen, Sensitivity, errorMessage, openUrl, reportError, ui } from '@/components/BrandUI';
 import { enableNotifications, setBackgroundChecks } from '@/lib/monitor';
+import { alertHazardOptions } from '@/lib/model';
 import { useColors } from '@/hooks/useColors';
 import { fonts } from '@/constants/colors';
+import { WatchAddresses } from '@/components/WatchAddresses';
 
 export default function Preferences() {
   const c = useColors();
@@ -29,7 +31,7 @@ export default function Preferences() {
   return <Screen><View style={ui.content}>
     <View><Text style={ui.label}>Make it yours</Text><Text style={[ui.title, { marginTop: 6 }]}>Watch preferences</Text></View>
     {!!storageError && <Notice error>{storageError}</Notice>}
-    <Pressable onPress={() => router.push('/place')} style={[ui.card, ui.row]}><Feather name="map-pin" size={23} color={c.success} /><View style={{ flex: 1, gap: 5 }}><Text style={ui.h2}>{settings.home?.name ?? 'Set your home location'}</Text><Text style={ui.small}>{settings.home ? `${settings.radius} km watch radius · tap to edit` : 'Save a place before enabling Home Watch'}</Text></View><Feather name="chevron-right" size={18} color={c.mutedForeground} /></Pressable>
+    <WatchAddresses />
     <View style={ui.card}><Text style={ui.h2}>Home alert sensitivity</Text><Sensitivity value={settings.homeLevel} onChange={homeLevel => void saveSettings({ homeLevel }).catch(reportError)} /></View>
     <View style={ui.card}><Text style={ui.h2}>Trip alert sensitivity</Text><Sensitivity value={settings.tripLevel} onChange={tripLevel => void saveSettings({ tripLevel }).catch(reportError)} /><Text style={ui.small}>Changes here never change your Home Watch sensitivity.</Text></View>
     <View style={ui.card}>
@@ -41,8 +43,8 @@ export default function Preferences() {
       </>}
     </View>
     <View style={ui.card}>
-      <View style={ui.spread}><View style={{ flex: 1 }}><Text style={ui.h2}>On-device notifications</Text><Text style={ui.small}>New incidents and warning-level changes</Text></View><Switch accessibilityLabel="Enable on-device notifications" value={settings.notifications} onValueChange={v => void notifications(v)} disabled={busy || !ready} trackColor={{ true: c.success, false: c.border }} /></View>
-      <Text style={ui.small}>Off until you opt in. Checks run while the app is open. No server push service is connected, and no alert is guaranteed.</Text>
+      <View style={ui.spread}><View style={{ flex: 1 }}><Text style={ui.h2}>On-device notifications</Text><Text style={ui.small}>Selected hazards for watch zones and trips</Text></View><Switch accessibilityLabel="Enable on-device notifications" value={settings.notifications} onValueChange={v => void notifications(v)} disabled={busy || !ready} trackColor={{ true: c.success, false: c.border }} /></View>
+      <Text style={ui.small}>Selected sources are checked against enabled watch zones and your active trip. TfNSW/SES need a mapped location; BOM warnings are labelled NSW-wide because the current feed has no geocoded warning areas. No alert is guaranteed.</Text>
       {Platform.OS === 'web' && <Notice>Notifications and background checks must be enabled in the native app, not this browser preview.</Notice>}
       <View style={[ui.spread, { marginTop: 10 }]}><View style={{ flex: 1 }}><Text style={ui.h2}>Background checks</Text><Text style={ui.small}>Optional · scheduled by your phone</Text></View><Switch accessibilityLabel="Enable background incident checks" value={settings.background} onValueChange={v => void background(v)} disabled={busy || !settings.notifications || Platform.OS === 'web'} trackColor={{ true: c.success, false: c.border }} /></View>
       <Text style={ui.small}>Requests a check about every 15 minutes, but iOS/Android decide when it runs. May require a native build and Background App Refresh. It can stop when the app is force-closed.</Text>
@@ -51,11 +53,20 @@ export default function Preferences() {
       {!!monitorError && <Notice error>{monitorError}</Notice>}
       {Platform.OS !== 'web' && <Button title="Open phone permission settings" icon="settings" secondary onPress={() => void Linking.openSettings().catch(reportError)} />}
     </View>
+    <View style={ui.card} testID="hazard-alert-preferences">
+      <Text style={ui.h2}>Choose alert sources</Text>
+      <Text style={ui.small}>Selected feeds can alert for enabled watch zones and your active trip. Turn on-device notifications above to receive phone alerts. Source pages remain available when a source is switched off.</Text>
+      {alertHazardOptions.map(option => <View key={option.key} style={[ui.spread, { gap: 14, paddingVertical: 11, borderTopWidth: 1, borderColor: c.border }]}>
+        <View style={{ flex: 1, gap: 4 }}><Text style={ui.text}>{option.label}</Text><Text style={ui.small}>{option.detail}</Text></View>
+        <Switch accessibilityLabel={`Include ${option.label} in alerts`} value={settings.alertHazards[option.key]} onValueChange={enabled => void saveSettings(current => ({ alertHazards: { ...current.alertHazards, [option.key]: enabled } })).catch(reportError)} disabled={!ready} trackColor={{ true: c.success, false: c.border }} />
+      </View>)}
+      <Text style={ui.small}>Lightning and hail alerts use Xweather events. Wind and rain thresholds are advisory estimates, not official warning levels. Unlocated TfNSW/SES reports cannot trigger local alerts; BOM warnings are clearly labelled statewide.</Text>
+    </View>
     <View style={ui.card}><Text style={ui.h2}>Navigation preference</Text><Text style={ui.text}>{settings.navigationApp ?? 'Ask on each trip'}</Text><Text style={ui.small}>A choice is remembered only after you opt in on the Trip Watch screen.</Text>{settings.navigationApp && <Button title="Forget preferred app" icon="x" secondary onPress={() => void saveSettings({ navigationApp: null }).catch(reportError)} />}</View>
     <View style={ui.card}>
       <Text style={ui.label}>Alertify.au Companion</Text><Text style={ui.h2}>Awareness, not alarm.</Text>
-      <Text style={ui.small}>Saved places, alert settings and trip estimates stay on your device. Address searches are sent to Nominatim, route coordinates to OSRM, and weather coordinates to Open-Meteo. Notifications are generated on device; no account or remote push token is collected.</Text>
-      <Text style={ui.small}>Incident information: NSW RFS. Coverage does not include all traffic, weather, flood or emergency warnings. Use official sources, and call 000 in an emergency.</Text>
+      <Text style={ui.small}>Saved places, alert settings and trip estimates stay on your device. Selected alert checks send watch coordinates or route samples to Alertify and its listed data sources. Address searches go to Nominatim and routes to OSRM. Notifications are scheduled locally; there is no account or remote push token.</Text>
+      <Text style={ui.small}>Alert feeds: NSW RFS, fire danger ratings, TfNSW, BOM, SES and Xweather Lightning, Hail Threats, Wind and Rain. Radar: RainViewer. Checks are periodic and source-dependent, not continuous monitoring. Some feeds are statewide or lack a usable location. Sources may be incomplete or unavailable. Call 000 in an emergency.</Text>
       <Button title="Open Alertify.au" icon="external-link" secondary onPress={() => void openUrl('https://alertify.au')} />
       <Pressable onPress={() => void openUrl('https://www.rfs.nsw.gov.au/feeds/majorIncidents.json')}><Text style={{ color: c.primary, fontFamily: fonts.bold, fontSize: 12, paddingVertical: 8 }}>View incident data source</Text></Pressable>
     </View>
