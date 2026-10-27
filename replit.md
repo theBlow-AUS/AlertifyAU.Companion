@@ -26,7 +26,7 @@ _Populate as you build — short repo map plus pointers to the source-of-truth f
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- Route-risk previews use Mapbox Directions geometry, while hazards come from Alertify's own warning data; see [the route-data decision](docs/route-data-decision.md).
 
 ## Product
 
