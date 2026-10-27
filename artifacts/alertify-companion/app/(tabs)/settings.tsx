@@ -9,6 +9,7 @@ import { alertHazardOptions } from '@/lib/model';
 import { useColors } from '@/hooks/useColors';
 import { fonts } from '@/constants/colors';
 import { WatchAddresses } from '@/components/WatchAddresses';
+import { AdvisoryThresholds } from '@/components/AdvisoryThresholds';
 
 export default function Preferences() {
   const c = useColors();
@@ -62,6 +63,7 @@ export default function Preferences() {
       </View>)}
       <Text style={ui.small}>Lightning and hail alerts use Xweather events. Wind and rain thresholds are advisory estimates, not official warning levels. Unlocated TfNSW/SES reports cannot trigger local alerts; BOM warnings are clearly labelled statewide.</Text>
     </View>
+    <AdvisoryThresholds key={`${settings.windGustThresholdKph}:${settings.rainThresholdMmH}`} />
     <View style={ui.card}><Text style={ui.h2}>Navigation preference</Text><Text style={ui.text}>{settings.navigationApp ?? 'Ask on each trip'}</Text><Text style={ui.small}>A choice is remembered only after you opt in on the Trip Watch screen.</Text>{settings.navigationApp && <Button title="Forget preferred app" icon="x" secondary onPress={() => void saveSettings({ navigationApp: null }).catch(reportError)} />}</View>
     <View style={ui.card}>
       <Text style={ui.label}>Alertify.au Companion</Text><Text style={ui.h2}>Awareness, not alarm.</Text>

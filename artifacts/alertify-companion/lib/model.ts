@@ -15,9 +15,22 @@ export const alertHazardOptions: { key: AlertHazardKey; label: string; detail: s
   { key: 'ses', label: 'NSW SES HazardWatch', detail: 'Only reports with a usable location can be matched.' },
   { key: 'lightning', label: 'Xweather lightning', detail: 'Strikes matched to a watch zone or trip.' },
   { key: 'hail', label: 'Xweather hail threats', detail: 'Forecast areas intersecting a watch zone or trip.' },
-  { key: 'wind', label: 'Xweather strong wind', detail: 'Gusts at or above 90 km/h; advisory threshold.' },
-  { key: 'rain', label: 'Xweather heavy rain', detail: 'Forecast peak rate at or above 20 mm/h; advisory threshold.' },
+  { key: 'wind', label: 'Xweather strong wind', detail: 'Gusts at or above your advisory threshold below.' },
+  { key: 'rain', label: 'Xweather heavy rain', detail: 'Forecast peak hourly rate at or above your advisory threshold below.' },
 ];
+export const advisoryThresholdLimits = {
+  windGustThresholdKph: { min: 10, max: 300, defaultValue: 90, label: 'Wind gusts', unit: 'km/h' },
+  rainThresholdMmH: { min: 1, max: 200, defaultValue: 20, label: 'Hourly rainfall', unit: 'mm/hour' },
+} as const;
+export type AdvisoryThresholdKey = keyof typeof advisoryThresholdLimits;
+function normalizeThreshold(key: AdvisoryThresholdKey, value: unknown): number {
+  const { min, max, defaultValue, label, unit } = advisoryThresholdLimits[key];
+  if (value === undefined) return defaultValue;
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < min || value > max) {
+    throw new Error(`${label} must be a whole number from ${min} to ${max} ${unit}. Saved preferences have not been changed.`);
+  }
+  return value;
+}
 export type Place = { name: string; detail: string; latitude: number; longitude: number };
 export type WatchAddress = {
   id: string; label: string; place: Place; radius: number; enabled: boolean;
@@ -27,6 +40,7 @@ export type Settings = {
   watches: WatchAddress[]; activeWatchId: string | null;
   homeLevel: Level; tripLevel: Level; navigationApp: NavigationApp | null;
   alertHazards: AlertHazards;
+  windGustThresholdKph: number; rainThresholdMmH: number;
   notifications: boolean; background: boolean;
   quietHours: boolean; quietStart: number; quietEnd: number;
 };
@@ -50,10 +64,14 @@ export const defaultSettings: Settings = {
   watches: [], activeWatchId: null,
   tripLevel: 'significant', navigationApp: null, notifications: false, background: false,
   alertHazards: defaultAlertHazards,
+  windGustThresholdKph: advisoryThresholdLimits.windGustThresholdKph.defaultValue,
+  rainThresholdMmH: advisoryThresholdLimits.rainThresholdMmH.defaultValue,
   quietHours: false, quietStart: 22, quietEnd: 7,
 };
 export function normalizeSettings(raw: Partial<Settings>): Settings {
   const base = { ...defaultSettings, ...raw };
+  const windGustThresholdKph = normalizeThreshold('windGustThresholdKph', raw.windGustThresholdKph);
+  const rainThresholdMmH = normalizeThreshold('rainThresholdMmH', raw.rainThresholdMmH);
   const alertHazards = raw.alertHazards && typeof raw.alertHazards === 'object'
     ? { ...defaultAlertHazards, ...raw.alertHazards }
     : legacyAlertHazards;
@@ -70,7 +88,7 @@ export function normalizeSettings(raw: Partial<Settings>): Settings {
     throw new Error('A saved watch address is invalid. Existing saved data has not been overwritten.');
   }
   const active = migratedWatches.find(w => w.id === raw.activeWatchId) ?? migratedWatches[0];
-  return { ...base, alertHazards, watches: migratedWatches, activeWatchId: active?.id ?? null, home: active?.place ?? null, radius: active?.radius ?? 10 };
+  return { ...base, windGustThresholdKph, rainThresholdMmH, alertHazards, watches: migratedWatches, activeWatchId: active?.id ?? null, home: active?.place ?? null, radius: active?.radius ?? 10 };
 }
 export const levels: { value: Level; label: string; detail: string }[] = [
   { value: 'urgent', label: 'Urgent only', detail: 'Emergency Warnings only.' },

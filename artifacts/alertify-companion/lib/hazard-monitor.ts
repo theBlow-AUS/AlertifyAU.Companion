@@ -39,10 +39,13 @@ function reportMatches(scope: Scope, report: { latitude: number | null; longitud
   const point = { latitude: report.latitude, longitude: report.longitude };
   return scope.path ? routeDistance(point, scope.path) <= scope.radius : !!scope.place && distance(scope.place, point) <= scope.radius;
 }
-function hazardSnapshot(scope: Scope, source: HazardNotice['source'], alerts: HazardNotice[], enabled: boolean): HazardScopeSnapshot {
-  return { id: `${scope.id}:${source}`, label: scope.label, signature: `${scope.signature}:${source}:${enabled}`, alerts };
+function hazardSnapshot(scope: Scope, source: HazardNotice['source'], alerts: HazardNotice[], enabled: boolean, threshold?: number): HazardScopeSnapshot {
+  // Only the changed source gets a new baseline, including after an outage.
+  const thresholdSignature = threshold === undefined ? '' : `:threshold:${threshold}`;
+  return { id: `${scope.id}:${source}`, label: scope.label, signature: `${scope.signature}:${source}:${enabled}${thresholdSignature}`, alerts };
 }
-const sourceEnabled = (settings: Settings, source: AlertHazardKey) => settings.alertHazards[source];
+const advisoryThreshold = (settings: Settings, source: WeatherHazardKey) => source === 'wind'
+  ? settings.windGustThresholdKph : source === 'rain' ? settings.rainThresholdMmH : undefined;
 export async function collectHazardSnapshots(settings: Settings, trip: Trip | null) {
   const snapshots: HazardScopeSnapshot[] = [], errors: string[] = [];
   const scopes = scopesFor(settings, trip);
@@ -119,7 +122,7 @@ export async function collectHazardSnapshots(settings: Settings, trip: Trip | nu
 
   const selectedWeather = alertHazardOptions.filter((option): option is WeatherHazardOption => isWeatherHazard(option.key) && settings.alertHazards[option.key]);
   const disabledWeather = alertHazardOptions.filter((option): option is WeatherHazardOption => isWeatherHazard(option.key) && !settings.alertHazards[option.key]);
-  for (const scope of scopes) for (const option of disabledWeather) snapshots.push(hazardSnapshot(scope, option.key, [], false));
+  for (const scope of scopes) for (const option of disabledWeather) snapshots.push(hazardSnapshot(scope, option.key, [], false, advisoryThreshold(settings, option.key)));
   if (selectedWeather.length) {
     const points = [...new Map(scopes.flatMap(scope => scope.points).map(point => [
       `${point.latitude.toFixed(4)},${point.longitude.toFixed(4)}`, point,
@@ -157,7 +160,7 @@ export async function collectHazardSnapshots(settings: Settings, trip: Trip | nu
           }
         }
         if (option.key === 'wind' || option.key === 'rain') {
-          const threshold = option.key === 'wind' ? 90 : 20;
+          const threshold = option.key === 'wind' ? settings.windGustThresholdKph : settings.rainThresholdMmH;
           for (const result of weatherResults) for (const sample of result.samples) {
             const samplePoint = { latitude: sample.latitude, longitude: sample.longitude };
             const inScope = scope.path ? routeDistance(samplePoint, scope.path) <= scope.radius : !!scope.place && distance(scope.place, samplePoint) <= scope.radius;
@@ -175,7 +178,7 @@ export async function collectHazardSnapshots(settings: Settings, trip: Trip | nu
           }
         }
         const unique = [...new Map(alerts.map(alert => [alert.id, alert])).values()];
-        snapshots.push(hazardSnapshot(scope, option.key, unique, true));
+        snapshots.push(hazardSnapshot(scope, option.key, unique, true, advisoryThreshold(settings, option.key)));
       }
     }
   }

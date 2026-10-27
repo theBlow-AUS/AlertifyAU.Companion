@@ -14,6 +14,20 @@ function load(file, mocks = {}) {
 
 async function run() {
   const model = load('lib/model.ts');
+  const { advanceHazardMonitor } = load('lib/monitor-state.ts', { './model': model });
+  const legacy = model.normalizeSettings({ notifications: true, background: true });
+  assert.equal(legacy.windGustThresholdKph, 90);
+  assert.equal(legacy.rainThresholdMmH, 20);
+  assert.equal(legacy.alertHazards.wind, false, 'Migration does not subscribe legacy users to wind');
+  assert.equal(legacy.alertHazards.rain, false, 'Migration does not subscribe legacy users to rain');
+  assert.equal(legacy.notifications, true);
+  assert.equal(legacy.background, true);
+  for (const [key, limit] of Object.entries(model.advisoryThresholdLimits)) {
+    for (const value of [null, '', '90', NaN, Infinity, -Infinity, 0, -1, limit.min - 1, limit.max + 1, limit.min + 0.5]) {
+      assert.throws(() => model.normalizeSettings({ [key]: value }), /whole number/, `${key} rejects ${String(value)}`);
+    }
+    for (const value of [limit.min, limit.max]) assert.equal(model.normalizeSettings({ [key]: value })[key], value);
+  }
   const now = new Date().toISOString();
   const feeds = {
     fireRatings: { status: 'live', districts: [{ name: 'Greater Sydney Region', today: 'High', tomorrow: 'High', totalFireBan: true }] },
@@ -78,6 +92,57 @@ async function run() {
   assert.equal(JSON.stringify(alerts.get('hail').map(alert => alert.id)), JSON.stringify(['near-hail']));
   assert.match(alerts.get('wind')[0].body, /95 km\/h/);
   assert.match(alerts.get('rain')[0].body, /25\.0 mm\/h/);
+  const changedSettings = (windGustThresholdKph, rainThresholdMmH) => model.normalizeSettings({
+    ...settings, windGustThresholdKph, rainThresholdMmH,
+  });
+  const atBoundary = await collectHazardSnapshots(changedSettings(95, 25), null);
+  const snapshot = (result, key, scope = 'watch:home') => result.snapshots.find(item => item.id === `${scope}:${key}`);
+  assert.equal(snapshot(atBoundary, 'wind').alerts.length, 1, 'Wind matches exactly at the chosen threshold');
+  assert.equal(snapshot(atBoundary, 'rain').alerts.length, 1, 'Rain matches exactly at the chosen threshold');
+  const above = await collectHazardSnapshots(changedSettings(96, 26), null);
+  assert.equal(snapshot(above, 'wind').alerts.length, 0);
+  assert.equal(snapshot(above, 'rain').alerts.length, 0);
+  const lowered = await collectHazardSnapshots(changedSettings(80, 10), null);
+  const baseline = advanceHazardMonitor(above.snapshots, null);
+  const rebased = advanceHazardMonitor(lowered.snapshots, baseline.state);
+  assert.equal(rebased.fresh.length, 0, 'Lowering thresholds does not replay currently active wind/rain');
+  assert.equal(advanceHazardMonitor(lowered.snapshots, rebased.state).fresh.length, 0, 'Repeated checks stay quiet');
+  const cleared = advanceHazardMonitor(above.snapshots.map(item => ({
+    ...item, signature: lowered.snapshots.find(next => next.id === item.id).signature,
+  })), rebased.state);
+  assert.equal(advanceHazardMonitor(lowered.snapshots, cleared.state).fresh.length, 2, 'New crossings after an all-clear alert normally');
+  const windOnly = await collectHazardSnapshots(changedSettings(80, 20), null);
+  for (const key of ['rain', 'bom', 'rfs', 'lightning', 'hail', 'ses', 'tfnsw', 'fireDanger']) {
+    if (snapshot(checked, key)) assert.equal(snapshot(windOnly, key).signature, snapshot(checked, key).signature, `Changing wind does not reset ${key}`);
+  }
+  const rainOnly = await collectHazardSnapshots(changedSettings(90, 10), null);
+  assert.equal(snapshot(rainOnly, 'wind').signature, snapshot(checked, 'wind').signature);
+  assert.notEqual(snapshot(rainOnly, 'rain').signature, snapshot(checked, 'rain').signature);
+  const trip = {
+    start: place, destination: { ...place, name: 'Destination' },
+    coordinates: [[151.2, -33.86], [151.21, -33.86]], startedAt: Date.now(),
+  };
+  const tripAbove = await collectHazardSnapshots(changedSettings(96, 26), trip);
+  const tripLowered = await collectHazardSnapshots(changedSettings(80, 10), trip);
+  const tripScope = `trip:${trip.startedAt}`;
+  assert.equal(snapshot(tripAbove, 'wind', tripScope).alerts.length, 0);
+  assert.equal(snapshot(tripLowered, 'wind', tripScope).alerts.length, 1);
+  assert.equal(snapshot(tripLowered, 'rain', tripScope).alerts.length, 1);
+  assert.equal(advanceHazardMonitor(tripLowered.snapshots, advanceHazardMonitor(tripAbove.snapshots, null).state).fresh.length, 0, 'Trip thresholds also establish a fresh baseline');
+  const optedOut = model.normalizeSettings({
+    ...settings, notifications: false, background: false, quietHours: true,
+    alertHazards: { ...settings.alertHazards, wind: false, rain: false, bom: false },
+  });
+  const saved = model.normalizeSettings(JSON.parse(JSON.stringify({
+    ...optedOut, windGustThresholdKph: 80, rainThresholdMmH: 10,
+  })));
+  assert.equal(saved.windGustThresholdKph, 80);
+  assert.equal(saved.rainThresholdMmH, 10);
+  assert.equal(JSON.stringify(saved.alertHazards), JSON.stringify(optedOut.alertHazards));
+  for (const key of ['notifications', 'background', 'quietHours', 'homeLevel', 'tripLevel']) assert.equal(saved[key], optedOut[key]);
+  const disabled = await collectHazardSnapshots(saved, trip);
+  assert.equal(snapshot(disabled, 'wind').alerts.length, 0);
+  assert.equal(snapshot(disabled, 'rain', tripScope).alerts.length, 0);
   const muted = model.normalizeSettings({ ...settings, alertHazards: { ...settings.alertHazards, tfnsw: false } });
   const mutedResult = await collectHazardSnapshots(muted, null);
   assert.equal(mutedResult.snapshots.find(snapshot => snapshot.id === 'watch:home:tfnsw').alerts.length, 0);
@@ -85,7 +150,7 @@ async function run() {
   const stale = await collectHazardSnapshots(settings, null);
   assert.equal(stale.snapshots.some(snapshot => snapshot.id === 'watch:home:tfnsw'), false, 'Stale feeds do not advance a false all-clear baseline');
   assert.equal(stale.errors.some(error => /TfNSW/.test(error)), true, 'Unavailable selected source is reported to the user');
-  console.log('PASS: selected feeds, live source statuses, watch-zone filtering, statewide BOM labelling, unmapped SES exclusion, fire danger, weather events and advisory thresholds.');
+  console.log('PASS: selected feeds, source status, zone/trip matching, validated persisted advisory thresholds, migration preserving opt-ins, inclusive boundaries and source-specific baselines without replay.');
 }
 
 run().catch(error => { console.error(error); process.exitCode = 1; });
