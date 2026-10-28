@@ -98,6 +98,7 @@ export default function Trips() {
       <Text style={ui.small}>Opens the installed navigation app when available, otherwise its website.</Text>
     </View>
     <Notice>System-managed background checks can be delayed or stopped. Always follow official instructions and your navigation app. Never interact with the phone while driving.</Notice>
-    <Text style={ui.small}>Address search and routing © OpenStreetMap contributors. EV charging and CarPlay-specific interfaces are not part of this first version.</Text>
+    <Notice>CarPlay and Android Auto are not enabled in this version. Trip Watch and its Alertify route estimate stay on your phone; continue the drive in Google Maps or Waze. Alertify does not receive their live route or traffic data.</Notice>
+    <Text style={ui.small}>Address search and routing © OpenStreetMap contributors. EV charging is not part of this first version.</Text>
   </View></Screen>;
 }
