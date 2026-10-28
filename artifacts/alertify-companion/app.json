@@ -8,6 +8,8 @@
     "scheme": "alertify-companion",
     "userInterfaceStyle": "light",
     "ios": {
+      "bundleIdentifier": "app.replit.alertifyaucompanion",
+      "appleTeamId": "5X9LER9J53",
       "supportsTablet": false,
       "infoPlist": {
         "LSApplicationQueriesSchemes": ["comgooglemaps", "waze"],
