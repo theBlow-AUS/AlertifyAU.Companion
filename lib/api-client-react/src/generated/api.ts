@@ -9,8 +9,13 @@ import {
   useQuery
 } from '@tanstack/react-query';
 import type {
+  DataTag,
+  DefinedInitialDataOptions,
+  DefinedUseQueryResult,
+  QueryClient,
   QueryFunction,
   QueryKey,
+  UndefinedInitialDataOptions,
   UseQueryOptions,
   UseQueryResult
 } from '@tanstack/react-query';
@@ -91,7 +96,7 @@ export const getGetCompanionWeatherQueryKey = (params?: GetCompanionWeatherParam
     }
 
 
-export const getGetCompanionWeatherQueryOptions = <TData = Awaited<ReturnType<typeof getCompanionWeather>>, TError = ErrorType<void>>(params: GetCompanionWeatherParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCompanionWeather>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetCompanionWeatherQueryOptions = <TData = Awaited<ReturnType<typeof getCompanionWeather>>, TError = ErrorType<void>>(params: GetCompanionWeatherParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCompanionWeather>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
@@ -106,25 +111,49 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 
 
 
-   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCompanionWeather>>, TError, TData> & { queryKey: QueryKey }
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCompanionWeather>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
 }
 
 export type GetCompanionWeatherQueryResult = NonNullable<Awaited<ReturnType<typeof getCompanionWeather>>>
 export type GetCompanionWeatherQueryError = ErrorType<void>
 
 
+export function useGetCompanionWeather<TData = Awaited<ReturnType<typeof getCompanionWeather>>, TError = ErrorType<void>>(
+ params: GetCompanionWeatherParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCompanionWeather>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getCompanionWeather>>,
+          TError,
+          Awaited<ReturnType<typeof getCompanionWeather>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetCompanionWeather<TData = Awaited<ReturnType<typeof getCompanionWeather>>, TError = ErrorType<void>>(
+ params: GetCompanionWeatherParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCompanionWeather>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getCompanionWeather>>,
+          TError,
+          Awaited<ReturnType<typeof getCompanionWeather>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetCompanionWeather<TData = Awaited<ReturnType<typeof getCompanionWeather>>, TError = ErrorType<void>>(
+ params: GetCompanionWeatherParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCompanionWeather>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
  * @summary Point-scoped Xweather via Alertify and RainViewer radar metadata
  */
 
 export function useGetCompanionWeather<TData = Awaited<ReturnType<typeof getCompanionWeather>>, TError = ErrorType<void>>(
- params: GetCompanionWeatherParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCompanionWeather>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
-
- ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+ params: GetCompanionWeatherParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCompanionWeather>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getGetCompanionWeatherQueryOptions(params,options)
 
-  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 
   return withQueryKey(query, queryOptions.queryKey);
 }
@@ -175,7 +204,7 @@ export const getGetCompanionFireDistrictQueryKey = (params?: GetCompanionFireDis
     }
 
 
-export const getGetCompanionFireDistrictQueryOptions = <TData = Awaited<ReturnType<typeof getCompanionFireDistrict>>, TError = ErrorType<void>>(params: GetCompanionFireDistrictParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCompanionFireDistrict>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetCompanionFireDistrictQueryOptions = <TData = Awaited<ReturnType<typeof getCompanionFireDistrict>>, TError = ErrorType<void>>(params: GetCompanionFireDistrictParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCompanionFireDistrict>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
@@ -190,25 +219,49 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 
 
 
-   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCompanionFireDistrict>>, TError, TData> & { queryKey: QueryKey }
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCompanionFireDistrict>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
 }
 
 export type GetCompanionFireDistrictQueryResult = NonNullable<Awaited<ReturnType<typeof getCompanionFireDistrict>>>
 export type GetCompanionFireDistrictQueryError = ErrorType<void>
 
 
+export function useGetCompanionFireDistrict<TData = Awaited<ReturnType<typeof getCompanionFireDistrict>>, TError = ErrorType<void>>(
+ params: GetCompanionFireDistrictParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCompanionFireDistrict>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getCompanionFireDistrict>>,
+          TError,
+          Awaited<ReturnType<typeof getCompanionFireDistrict>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetCompanionFireDistrict<TData = Awaited<ReturnType<typeof getCompanionFireDistrict>>, TError = ErrorType<void>>(
+ params: GetCompanionFireDistrictParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCompanionFireDistrict>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getCompanionFireDistrict>>,
+          TError,
+          Awaited<ReturnType<typeof getCompanionFireDistrict>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetCompanionFireDistrict<TData = Awaited<ReturnType<typeof getCompanionFireDistrict>>, TError = ErrorType<void>>(
+ params: GetCompanionFireDistrictParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCompanionFireDistrict>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
  * @summary Match a map pin to the NSW RFS fire-weather area using Alertify council boundaries
  */
 
 export function useGetCompanionFireDistrict<TData = Awaited<ReturnType<typeof getCompanionFireDistrict>>, TError = ErrorType<void>>(
- params: GetCompanionFireDistrictParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCompanionFireDistrict>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
-
- ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+ params: GetCompanionFireDistrictParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCompanionFireDistrict>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getGetCompanionFireDistrictQueryOptions(params,options)
 
-  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 
   return withQueryKey(query, queryOptions.queryKey);
 }
@@ -252,7 +305,7 @@ export const getGetCompanionFeedsQueryKey = () => {
     }
 
 
-export const getGetCompanionFeedsQueryOptions = <TData = Awaited<ReturnType<typeof getCompanionFeeds>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCompanionFeeds>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetCompanionFeedsQueryOptions = <TData = Awaited<ReturnType<typeof getCompanionFeeds>>, TError = ErrorType<unknown>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCompanionFeeds>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
@@ -267,25 +320,49 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 
 
 
-   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCompanionFeeds>>, TError, TData> & { queryKey: QueryKey }
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCompanionFeeds>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
 }
 
 export type GetCompanionFeedsQueryResult = NonNullable<Awaited<ReturnType<typeof getCompanionFeeds>>>
 export type GetCompanionFeedsQueryError = ErrorType<unknown>
 
 
+export function useGetCompanionFeeds<TData = Awaited<ReturnType<typeof getCompanionFeeds>>, TError = ErrorType<unknown>>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCompanionFeeds>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getCompanionFeeds>>,
+          TError,
+          Awaited<ReturnType<typeof getCompanionFeeds>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetCompanionFeeds<TData = Awaited<ReturnType<typeof getCompanionFeeds>>, TError = ErrorType<unknown>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCompanionFeeds>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getCompanionFeeds>>,
+          TError,
+          Awaited<ReturnType<typeof getCompanionFeeds>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetCompanionFeeds<TData = Awaited<ReturnType<typeof getCompanionFeeds>>, TError = ErrorType<unknown>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCompanionFeeds>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
  * @summary Alertify public fire ratings and hazard feeds
  */
 
 export function useGetCompanionFeeds<TData = Awaited<ReturnType<typeof getCompanionFeeds>>, TError = ErrorType<unknown>>(
-  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCompanionFeeds>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
-
- ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCompanionFeeds>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getGetCompanionFeedsQueryOptions(options)
 
-  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 
   return withQueryKey(query, queryOptions.queryKey);
 }
@@ -330,7 +407,7 @@ export const getHealthCheckQueryKey = () => {
     }
 
 
-export const getHealthCheckQueryOptions = <TData = Awaited<ReturnType<typeof healthCheck>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof healthCheck>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getHealthCheckQueryOptions = <TData = Awaited<ReturnType<typeof healthCheck>>, TError = ErrorType<unknown>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof healthCheck>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
@@ -345,25 +422,49 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 
 
 
-   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof healthCheck>>, TError, TData> & { queryKey: QueryKey }
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof healthCheck>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
 }
 
 export type HealthCheckQueryResult = NonNullable<Awaited<ReturnType<typeof healthCheck>>>
 export type HealthCheckQueryError = ErrorType<unknown>
 
 
+export function useHealthCheck<TData = Awaited<ReturnType<typeof healthCheck>>, TError = ErrorType<unknown>>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof healthCheck>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof healthCheck>>,
+          TError,
+          Awaited<ReturnType<typeof healthCheck>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useHealthCheck<TData = Awaited<ReturnType<typeof healthCheck>>, TError = ErrorType<unknown>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof healthCheck>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof healthCheck>>,
+          TError,
+          Awaited<ReturnType<typeof healthCheck>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useHealthCheck<TData = Awaited<ReturnType<typeof healthCheck>>, TError = ErrorType<unknown>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof healthCheck>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
  * @summary Health check
  */
 
 export function useHealthCheck<TData = Awaited<ReturnType<typeof healthCheck>>, TError = ErrorType<unknown>>(
-  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof healthCheck>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
-
- ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof healthCheck>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getHealthCheckQueryOptions(options)
 
-  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 
   return withQueryKey(query, queryOptions.queryKey);
 }

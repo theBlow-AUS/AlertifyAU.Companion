@@ -26,8 +26,8 @@ export const GetCompanionWeatherResponse = zod.object({
   "name": zod.string(),
   "status": zod.enum(['live', 'partial', 'stale', 'unavailable']),
   "error": zod.string().nullable(),
-  "availablePoints": zod.number().int(),
-  "requestedPoints": zod.number().int(),
+  "availablePoints": zod.int(),
+  "requestedPoints": zod.int(),
   "fetchedAt": zod.string()
 })),
   "events": zod.array(zod.object({
@@ -126,7 +126,7 @@ export const GetCompanionFeedsResponse = zod.object({
   "sourceUrl": zod.string(),
   "latitude": zod.number().nullable(),
   "longitude": zod.number().nullable(),
-  "severity": zod.number().int()
+  "severity": zod.int()
 }))
 }))
 })
