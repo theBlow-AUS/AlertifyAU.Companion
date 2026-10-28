@@ -15,6 +15,7 @@ const path = require('path');
 
 const STATIC_ROOT = path.resolve(__dirname, '..', 'static-build');
 const TEMPLATE_PATH = path.resolve(__dirname, 'templates', 'landing-page.html');
+const PRIVACY_PATH = path.resolve(__dirname, '..', 'public', 'privacy', 'index.html');
 const basePath = (process.env.BASE_PATH || '/').replace(/\/+$/, '');
 
 const MIME_TYPES = {
@@ -132,6 +133,25 @@ const server = http.createServer((req, res) => {
 
   if (basePath && pathname.startsWith(basePath)) {
     pathname = pathname.slice(basePath.length) || '/';
+  }
+
+  if (pathname === '/privacy') {
+    res.writeHead(308, { location: `${basePath}/privacy/` });
+    return res.end();
+  }
+  if (pathname === '/privacy/' || pathname === '/privacy/index.html') {
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+      res.writeHead(405, { allow: 'GET, HEAD' });
+      return res.end();
+    }
+    const html = fs.readFileSync(PRIVACY_PATH);
+    res.writeHead(200, {
+      'content-type': 'text/html; charset=utf-8',
+      'cache-control': 'public, max-age=300',
+      'x-content-type-options': 'nosniff',
+      'referrer-policy': 'strict-origin-when-cross-origin',
+    });
+    return res.end(req.method === 'HEAD' ? undefined : html);
   }
 
   if (pathname === '/' || pathname === '/manifest') {

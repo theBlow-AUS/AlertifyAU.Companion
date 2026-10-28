@@ -1,0 +1,16 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "xid-AWR60wz56Q8xPDhBM"
+uri = "file://artifacts/alertify-companion/public/privacy/index.html"
+type = "html"
+title = "Alertify.au Companion privacy webpage"
+description = "Self-contained index.html for the /privacy/ directory. Includes the full policy, source attribution and support contact."
+logical_id = "2af194e4-ad0d-4977-8160-aaa5af3c9172"
+content_hash = "sha256:e7d613320a0b39ff2f62a7012bd2f2694d016d97cf047e045bdd052f56abc074"
+size = 12562
+mtime_ms = 1793170257341
+storage_uri = "gcs://replit-rams-assets-kirk/rams/assets/repl:10768309-8194-468a-8aca-ac732469391d/2af194e4-ad0d-4977-8160-aaa5af3c9172/2a0c0b9e-b096-4053-9d81-111a0011cbe9"
+storage_version_token = "1793170334458113"
+content_type = "text/html"

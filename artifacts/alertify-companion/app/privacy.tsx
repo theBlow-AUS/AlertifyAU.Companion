@@ -1,6 +1,6 @@
 import React from 'react';
 import { Pressable, Text, View } from 'react-native';
-import { Screen, openUrl, ui } from '@/components/BrandUI';
+import { Button, Screen, openUrl, ui } from '@/components/BrandUI';
 import { fonts } from '@/constants/colors';
 import { useColors } from '@/hooks/useColors';
 import { privacyPolicy } from '@/lib/privacy-policy';
@@ -16,6 +16,7 @@ export default function PrivacyPolicyScreen() {
           <Text style={ui.title}>Privacy policy</Text>
           <Text style={ui.small}>Last updated {privacyPolicy.updatedAt}</Text>
         </View>
+        <Button title="View online privacy policy" icon="external-link" secondary onPress={() => void openUrl(privacyPolicy.url)} />
 
         {privacyPolicy.sections.map(section => (
           <View key={section.title} style={ui.card}>

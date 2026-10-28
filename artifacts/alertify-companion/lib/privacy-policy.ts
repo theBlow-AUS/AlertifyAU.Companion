@@ -1,4 +1,5 @@
 export const privacyPolicy = {
+  url: 'https://alertifycompanion.replit.app/privacy/',
   updatedAt: '28 October 2026',
   sections: [
     {
