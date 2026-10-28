@@ -9,7 +9,10 @@
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": false,
-      "infoPlist": { "LSApplicationQueriesSchemes": ["comgooglemaps", "waze"] }
+      "infoPlist": {
+        "LSApplicationQueriesSchemes": ["comgooglemaps", "waze"],
+        "NSLocationWhenInUseUsageDescription": "Alertify.au Companion uses your location only when you choose to check fire danger, save a watch address, or select a trip starting point."
+      }
     },
     "android": {},
     "web": {

@@ -70,6 +70,7 @@ export default function Preferences() {
       <Text style={ui.small}>Saved places, alert settings and trip estimates stay on your device. Selected alert checks send watch coordinates or route samples to Alertify and its listed data sources. Address searches go to Nominatim and routes to OSRM. Notifications are scheduled locally; there is no account or remote push token.</Text>
       <Text style={ui.small}>Alert feeds: NSW RFS, fire danger ratings, TfNSW, BOM, SES and Xweather Lightning, Hail Threats, Wind and Rain. Radar: RainViewer. Checks are periodic and source-dependent, not continuous monitoring. Some feeds are statewide or lack a usable location. Sources may be incomplete or unavailable. Call 000 in an emergency.</Text>
       <Button title="Open Alertify.au" icon="external-link" secondary onPress={() => void openUrl('https://alertify.au')} />
+      <Button title="Privacy policy" icon="shield" secondary onPress={() => router.push('/privacy')} />
       <Pressable onPress={() => void openUrl('https://www.rfs.nsw.gov.au/feeds/majorIncidents.json')}><Text style={{ color: c.primary, fontFamily: fonts.bold, fontSize: 12, paddingVertical: 8 }}>View incident data source</Text></Pressable>
     </View>
   </View></Screen>;

@@ -38,3 +38,9 @@ The user also requested Xweather Lightning, Live Weather Radar, Xweather Hail Th
 **Why:** The user asked to add these sources to the zone/trip experience, not just as a separate generic feed list.
 
 **How to apply:** Keep them relevant to the selected saved zone or estimated trip, while preserving specialist-app navigation handoff and clearly stating sampling/coverage limits.
+
+Alertify.au is the Companion’s stated privacy operator. The app is not designed for children under 13, submitted location coordinates are not retained in request logs, and Live Map visits are included in Alertify.au website analytics.
+
+**Why:** The user confirmed these privacy practices while preparing the app for App Store review.
+
+**How to apply:** Disclose location requests to external services and Live Map analytics; do not describe the app as analytics-free or as retaining no data of any kind.
