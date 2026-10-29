@@ -80,6 +80,58 @@ Until those gates are met:
 - Never use the phone while driving; review information before departure and
   follow official emergency instructions.
 
+## Hazard and route verification status
+
+**Car-display verification is blocked, not passed.** There is no native display
+scene, service, or display-specific UI in this project, and no supported car
+simulator or compatible display target can be exercised from the current build.
+No claim is made that the following display scenarios have been tested on a
+simulator or in a vehicle.
+
+The current phone-side implementation was reviewed for these relevant
+behaviors:
+
+- RFS route results use geolocated incident points within a 5 km corridor.
+  Missing or older-than-five-minute RFS data is presented as unavailable or
+  stale, not as a current assessment.
+- Weather checks use sampled route points and scope returned events to the
+  estimated route corridor. Stale or unavailable results are explicitly
+  identified; a blank radar area is not presented as proof of no hazard.
+- Nearby-feed filtering excludes reports with no usable coordinates and
+  includes fire-danger ratings only when a saved watch address has a confirmed
+  district match. Statewide or unmapped information is not asserted to be
+  nearby.
+- Location denial has an explicit message and offers address search instead.
+- Trip UI calls the route an estimate based on OpenStreetMap through OSRM and
+  says Google Maps and Waze may choose different routes; it does not claim to
+  read their live routes or traffic.
+
+These are source-code observations, not display validation. In particular,
+they do not establish that every source exposes a suitable source timestamp or
+update age for a future car display.
+
+### Required release checks after native integration
+
+Do not mark a car-display release verified until each item has a recorded
+result on the supported simulator and compatible hardware:
+
+| Scenario | Acceptance criteria |
+| --- | --- |
+| Fresh, mapped nearby hazard | Show only hazards matched to a real location in the selected nearby area or estimated route corridor. Show the source and source update time/age. |
+| Stale or unavailable source | Clearly identify the affected source and stale/unavailable state. Never show cached data as current or describe missing results as an all-clear. |
+| Unmapped or statewide report | Do not place it in nearby/route results without a valid geographic match. If shown in a separate statewide context, label that scope explicitly. |
+| Location denied or unavailable | Do not substitute an assumed current location. State that location-based matching is unavailable; allow a supported manual-place flow where practical. |
+| Route changed | Remove or visibly invalidate results for the previous route until the new Alertify estimate and hazard checks are ready. |
+| Connection lost and restored | Make stale/offline state apparent, retain source age, and verify recovery refreshes data without presenting an outage as safe. |
+| Display disconnect and reconnect | Verify the display does not imply monitoring continued while disconnected and that reconnecting restores a current, correctly scoped view without duplicate alerts. |
+| Route wording | Call it an **Alertify estimate**. Never imply it is the route selected by Google Maps/Waze or includes their live traffic. |
+| Glanceability and interaction | Use only approved driving-safe templates, concise source/age/status labels, and minimal interaction. Verify essential hazard context is readable at a glance and cannot require phone interaction while driving. |
+
+Record device/simulator versions, build identifier, scenario result, and any
+known limitations with the release evidence. Re-run the relevant checks after
+changes to native display templates, route matching, feed freshness handling,
+or connection/reconnection behavior.
+
 ## Build-path references
 
 - Replit Native Mobile Apps: https://docs.replit.com/features/artifact-types/building-mobile-apps
