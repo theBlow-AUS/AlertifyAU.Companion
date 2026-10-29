@@ -29,20 +29,40 @@ claim CarPlay compatibility or submit an in-car map until:
 3. The supported release process is confirmed to package and sign those native
    additions with the approved entitlement.
 
+### Build-path check
+
+The current Replit mobile build and publishing guidance confirms support for
+standard React Native/Expo builds and App Store Connect submission, but says
+custom native code requiring an entitlement or CarPlay scene is not supported
+by its managed build toolchain. No separate Xcode/EAS build and signing process
+for this app has been confirmed. Therefore, the CarPlay scene is blocked until
+the account holder confirms both Apple's entitlement approval and a separate
+supported build/signing path that can include the capability and native scene.
+Do not add CarPlay configuration to `app.json` or describe this app as
+CarPlay-enabled before those gates pass.
+
+The account holder confirmed for this release review that the entitlement has
+not been requested and no external native iOS build/signing path is available.
+The gates are not met; no CarPlay scene or entitlement has been added.
+
 Apple's entitlement request and navigation integration guides:
 
 - https://developer.apple.com/documentation/carplay/requesting-carplay-entitlements
 - https://developer.apple.com/documentation/carplay/integrating-carplay-with-your-navigation-app
 
+Replit mobile build references:
+
+- https://docs.replit.com/features/artifact-types/building-mobile-apps
+- https://docs.replit.com/build/mobile-upload-ios
+
 ## Android Auto gate
 
 Android Auto navigation apps must implement the Android for Cars navigation
 category, its navigation service and permitted navigation templates. This
-project has no Android for Cars service or templates. Replit's current mobile
-publishing guidance says Google Play publishing is not supported, so a complete
-Android Auto release and distribution path is not verified here. Do not claim
-Android Auto support until the native implementation, build path, Play
-distribution and real-device testing are confirmed.
+project has no Android for Cars service or templates. A supported Android Auto
+service, build, and distribution path for this app has not been confirmed. Do
+not claim Android Auto support or begin a native implementation until the
+Android build and distribution path are confirmed.
 
 Android's navigation-app requirements:
 
