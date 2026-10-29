@@ -1,6 +1,6 @@
 export const privacyPolicy = {
   url: 'https://alertifycompanion.replit.app/privacy/',
-  updatedAt: '28 October 2026',
+  updatedAt: '29 October 2026',
   sections: [
     {
       title: 'Who we are',
@@ -19,9 +19,10 @@ export const privacyPolicy = {
     {
       title: 'Location, address searches and routes',
       paragraphs: [
-        'Location permission is used only when you choose a location-based feature, such as checking fire danger at your current location, saving a watch address, or choosing a trip starting point. You can deny permission and search for a place instead.',
+        'Location permission is used when you choose a location-based feature, such as checking fire danger at your current location, saving a watch address, or choosing a trip starting point. Current-location hazard alerts are off by default. If you turn them on, the app periodically checks your position while it is open against the selected hazard feeds and the radius you choose. You can deny or revoke location permission and continue using features that do not require it.',
+        'Background location is a separate, optional setting for Trip Watch. If you enable it and grant background location permission, the app can receive location updates while an active Trip Watch is running, including while you use another app for navigation. Location updates stop when Trip Watch ends or you turn the setting off. iOS and Android can delay or stop background work, so continuous tracking and alert delivery are not guaranteed.',
         'When you search for an address or place, the search text is sent to OpenStreetMap Nominatim to find matching Australian locations. When you estimate a route, its start and destination coordinates are sent to the public OSRM routing service. These providers receive the requests under their own service terms and privacy practices.',
-        'Selected watch-zone coordinates and route sample coordinates are sent to Alertify’s service to match fire-danger districts and request weather checks. Alertify processes those coordinates to return the requested results and does not retain them in location request logs or attach them to an account. Weather requests are relayed through Alertify to Xweather. Request data may be processed briefly in service memory while a response is prepared.',
+        'Selected watch-zone coordinates, route sample coordinates, and current-position coordinates for enabled live alerts are sent to Alertify’s service to match fire-danger districts and request hazard or weather checks. Alertify processes those coordinates to return the requested results and does not retain them in location request logs or attach them to an account. Weather requests are relayed through Alertify to Xweather. Request data may be processed briefly in service memory while a response is prepared.',
         'If you choose to open Google Maps or Waze, the selected route locations are passed to that app. Its own privacy policy then applies. Alertify does not receive the other app’s live route or traffic data.',
       ],
     },
@@ -51,14 +52,14 @@ export const privacyPolicy = {
     {
       title: 'How long information is kept',
       paragraphs: [
-        'Watch addresses and preferences stay on your device until you delete them, clear the app’s data, or remove the app. You can delete a watch address in the app and end a Trip Watch from its trip screen. Device backups may affect when locally stored information is fully removed.',
+        'Watch addresses and preferences stay on your device until you delete them, clear the app’s data, or remove the app. Current-location alert checks keep only the last location/check timestamps and status on the device; the app does not save a history of current coordinates. You can turn current-location alerts or Trip Watch background location off, delete a watch address in the app, or end a Trip Watch from its trip screen. Device backups may affect when locally stored information is fully removed.',
         'Alertify does not keep submitted coordinates in location request logs or user profiles. Some service responses are held temporarily in server memory to reduce repeated requests; this is not a saved user location history.',
       ],
     },
     {
       title: 'Your choices and requests',
       paragraphs: [
-        'You can deny or revoke location permission in your device settings, choose not to save an address, turn off notification checks, delete saved watch addresses, or end a Trip Watch. For questions or requests about information handled by Alertify, email support@ignisse.app. As the app has no user account, most saved app information is managed directly on your device.',
+        'You can deny or revoke location permission in your device settings, turn off current-location alerts, turn off Trip Watch background location, choose not to save an address, turn off notification checks, delete saved watch addresses, or end a Trip Watch. For questions or requests about information handled by Alertify, email support@ignisse.app. As the app has no user account, most saved app information is managed directly on your device.',
       ],
     },
     {

@@ -31,6 +31,15 @@ function normalizeThreshold(key: AdvisoryThresholdKey, value: unknown): number {
   }
   return value;
 }
+export const currentLocationRadiusLimits = { min: 1, max: 50, defaultValue: 10 } as const;
+function normalizeCurrentLocationRadius(value: unknown): number {
+  const { min, max, defaultValue } = currentLocationRadiusLimits;
+  if (value === undefined) return defaultValue;
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < min || value > max) {
+    throw new Error(`Current-location alert radius must be a whole number from ${min} to ${max} km. Saved preferences have not been changed.`);
+  }
+  return value;
+}
 export type Place = { name: string; detail: string; latitude: number; longitude: number };
 export type WatchAddress = {
   id: string; label: string; place: Place; radius: number; enabled: boolean;
@@ -40,9 +49,15 @@ export type Settings = {
   watches: WatchAddress[]; activeWatchId: string | null;
   homeLevel: Level; tripLevel: Level; navigationApp: NavigationApp | null;
   alertHazards: AlertHazards;
+  currentLocationAlerts: boolean; currentLocationRadiusKm: number; tripBackgroundLocation: boolean;
   windGustThresholdKph: number; rainThresholdMmH: number;
   notifications: boolean; background: boolean;
   quietHours: boolean; quietStart: number; quietEnd: number;
+};
+export type LiveLocationStatus = {
+  lastLocationAt: number | null;
+  lastCheckAt: number | null;
+  error: string | null;
 };
 export type Incident = {
   id: string; title: string; category: string; severity: number;
@@ -59,10 +74,13 @@ export const SETTINGS_KEY = 'alertify.settings.v1';
 export const TRIP_KEY = 'alertify.trip.v1';
 export const FEED_KEY = 'alertify.feed.v1';
 export const MONITOR_KEY = 'alertify.monitor.v1';
+export const LIVE_LOCATION_STATUS_KEY = 'alertify.live-location-status.v1';
+export const TRIP_LOCATION_TASK = 'alertify-companion-trip-location';
 export const defaultSettings: Settings = {
   home: null, radius: 10, watch: true, homeLevel: 'significant',
   watches: [], activeWatchId: null,
   tripLevel: 'significant', navigationApp: null, notifications: false, background: false,
+  currentLocationAlerts: false, currentLocationRadiusKm: currentLocationRadiusLimits.defaultValue, tripBackgroundLocation: false,
   alertHazards: defaultAlertHazards,
   windGustThresholdKph: advisoryThresholdLimits.windGustThresholdKph.defaultValue,
   rainThresholdMmH: advisoryThresholdLimits.rainThresholdMmH.defaultValue,
@@ -72,6 +90,7 @@ export function normalizeSettings(raw: Partial<Settings>): Settings {
   const base = { ...defaultSettings, ...raw };
   const windGustThresholdKph = normalizeThreshold('windGustThresholdKph', raw.windGustThresholdKph);
   const rainThresholdMmH = normalizeThreshold('rainThresholdMmH', raw.rainThresholdMmH);
+  const currentLocationRadiusKm = normalizeCurrentLocationRadius(raw.currentLocationRadiusKm);
   const alertHazards = raw.alertHazards && typeof raw.alertHazards === 'object'
     ? { ...defaultAlertHazards, ...raw.alertHazards }
     : legacyAlertHazards;
@@ -88,7 +107,14 @@ export function normalizeSettings(raw: Partial<Settings>): Settings {
     throw new Error('A saved watch address is invalid. Existing saved data has not been overwritten.');
   }
   const active = migratedWatches.find(w => w.id === raw.activeWatchId) ?? migratedWatches[0];
-  return { ...base, windGustThresholdKph, rainThresholdMmH, alertHazards, watches: migratedWatches, activeWatchId: active?.id ?? null, home: active?.place ?? null, radius: active?.radius ?? 10 };
+  return {
+    ...base,
+    currentLocationAlerts: raw.currentLocationAlerts === true,
+    currentLocationRadiusKm,
+    tripBackgroundLocation: raw.tripBackgroundLocation === true,
+    windGustThresholdKph, rainThresholdMmH, alertHazards,
+    watches: migratedWatches, activeWatchId: active?.id ?? null, home: active?.place ?? null, radius: active?.radius ?? 10,
+  };
 }
 export const levels: { value: Level; label: string; detail: string }[] = [
   { value: 'urgent', label: 'Urgent only', detail: 'Emergency Warnings only.' },

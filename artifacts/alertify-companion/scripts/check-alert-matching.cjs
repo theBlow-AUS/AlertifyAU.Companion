@@ -14,7 +14,7 @@ function load(file, mocks = {}) {
 
 async function run() {
   const model = load('lib/model.ts');
-  const { advanceHazardMonitor } = load('lib/monitor-state.ts', { './model': model });
+  const { advanceMonitor, advanceHazardMonitor } = load('lib/monitor-state.ts', { './model': model });
   const legacy = model.normalizeSettings({ notifications: true, background: true });
   assert.equal(legacy.windGustThresholdKph, 90);
   assert.equal(legacy.rainThresholdMmH, 20);
@@ -22,6 +22,12 @@ async function run() {
   assert.equal(legacy.alertHazards.rain, false, 'Migration does not subscribe legacy users to rain');
   assert.equal(legacy.notifications, true);
   assert.equal(legacy.background, true);
+  assert.equal(legacy.currentLocationAlerts, false, 'Existing users are not opted in to current-location tracking');
+  assert.equal(legacy.currentLocationRadiusKm, 10);
+  for (const value of [null, '', '10', 0, -1, 1.5, 51]) {
+    assert.throws(() => model.normalizeSettings({ currentLocationRadiusKm: value }), /1 to 50 km/, `Current-location radius rejects ${String(value)}`);
+  }
+  for (const value of [1, 50]) assert.equal(model.normalizeSettings({ currentLocationRadiusKm: value }).currentLocationRadiusKm, value);
   for (const [key, limit] of Object.entries(model.advisoryThresholdLimits)) {
     for (const value of [null, '', '90', NaN, Infinity, -Infinity, 0, -1, limit.min - 1, limit.max + 1, limit.min + 0.5]) {
       assert.throws(() => model.normalizeSettings({ [key]: value }), /whole number/, `${key} rejects ${String(value)}`);
@@ -92,6 +98,37 @@ async function run() {
   assert.equal(JSON.stringify(alerts.get('hail').map(alert => alert.id)), JSON.stringify(['near-hail']));
   assert.match(alerts.get('wind')[0].body, /95 km\/h/);
   assert.match(alerts.get('rain')[0].body, /25\.0 mm\/h/);
+  const liveSettings = model.normalizeSettings({
+    ...settings, watch: false, watches: [], activeWatchId: null,
+    currentLocationAlerts: true, currentLocationRadiusKm: 10,
+  });
+  const liveChecked = await collectHazardSnapshots(liveSettings, null, place);
+  assert.equal(liveChecked.errors.length, 0);
+  assert.equal(liveChecked.snapshots.some(item => item.id === 'current-location:tfnsw'), true);
+  assert.equal(liveChecked.snapshots.find(item => item.id === 'current-location:tfnsw').alerts.length, 1, 'Current position scopes match nearby mapped reports');
+  assert.equal(liveChecked.snapshots.find(item => item.id === 'current-location:ses').alerts.length, 1);
+  assert.equal(liveChecked.snapshots.find(item => item.id === 'current-location:bom').alerts.length, 1, 'Ungeocoded BOM remains statewide');
+  const liveRfsIncident = { id: 'nearby-rfs', category: 'Fire', type: 'Bush fire', title: 'Nearby incident', latitude: place.latitude, longitude: place.longitude, severity: 3 };
+  const farRfsIncident = { ...liveRfsIncident, id: 'distant-rfs', latitude: -32.25, longitude: 148.6 };
+  const liveBaseline = advanceMonitor(liveSettings, null, [liveRfsIncident], null, place);
+  assert.equal(liveBaseline.fresh.length, 0, 'First current-location check establishes a baseline');
+  const liveNext = advanceMonitor(liveSettings, null, [liveRfsIncident, farRfsIncident], liveBaseline.state, place);
+  assert.equal(liveNext.fresh.length, 0, 'Distant incidents do not trigger live-radius alerts');
+  const newNearby = { ...liveRfsIncident, id: 'new-nearby-rfs' };
+  const liveNew = advanceMonitor(liveSettings, null, [liveRfsIncident, farRfsIncident, newNearby], liveNext.state, place);
+  assert.deepEqual(liveNew.fresh.map(item => item.id), ['new-nearby-rfs']);
+  const liveWithWatch = model.normalizeSettings({ ...settings, currentLocationAlerts: true, currentLocationRadiusKm: 10 });
+  const watchBaseline = advanceMonitor(liveSettings, null, [liveRfsIncident], null, place);
+  const enabledLiveScope = advanceMonitor(liveWithWatch, null, [liveRfsIncident], watchBaseline.state, place);
+  assert.equal(enabledLiveScope.fresh.length, 0, 'Adding a live-location scope does not replay an incident already in a watch zone');
+  const baselineScope = { id: 'watch:home:tfnsw', label: 'Home', signature: 'watch-signature', alerts: [{ source: 'tfnsw', id: 'same-report', title: 'Report', body: 'Near home' }] };
+  const emptyLocationScope = { id: 'current-location:tfnsw', label: 'Current location', signature: 'empty', alerts: [] };
+  const crossScopeBaseline = advanceHazardMonitor([baselineScope, emptyLocationScope], null);
+  const duplicateLocationScope = { ...emptyLocationScope, signature: 'live', alerts: [{ ...baselineScope.alerts[0] }] };
+  assert.equal(advanceHazardMonitor([baselineScope, duplicateLocationScope], crossScopeBaseline.state).fresh.length, 0, 'A report already seen in a watch zone is not duplicated by live radius');
+  const disabledLocationScope = { ...emptyLocationScope, signature: 'disabled:tfnsw' };
+  const disabledLocationState = advanceHazardMonitor([disabledLocationScope], crossScopeBaseline.state).state;
+  assert.equal(advanceHazardMonitor([duplicateLocationScope], disabledLocationState).fresh.length, 0, 'Re-enabling live location establishes a new baseline');
   const changedSettings = (windGustThresholdKph, rainThresholdMmH) => model.normalizeSettings({
     ...settings, windGustThresholdKph, rainThresholdMmH,
   });
@@ -150,7 +187,7 @@ async function run() {
   const stale = await collectHazardSnapshots(settings, null);
   assert.equal(stale.snapshots.some(snapshot => snapshot.id === 'watch:home:tfnsw'), false, 'Stale feeds do not advance a false all-clear baseline');
   assert.equal(stale.errors.some(error => /TfNSW/.test(error)), true, 'Unavailable selected source is reported to the user');
-  console.log('PASS: selected feeds, source status, zone/trip matching, validated persisted advisory thresholds, migration preserving opt-ins, inclusive boundaries and source-specific baselines without replay.');
+  console.log('PASS: selected feeds, current-location scope, cross-scope dedupe, source status, zone/trip matching, validated settings, migration opt-ins, inclusive thresholds and no replay after scope changes.');
 }
 
 run().catch(error => { console.error(error); process.exitCode = 1; });

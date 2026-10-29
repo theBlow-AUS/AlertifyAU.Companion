@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import { ActivityIndicator, AppState, View } from 'react-native';
+import { ActivityIndicator, AppState, Platform, View } from 'react-native';
 import colors from '@/constants/colors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -7,6 +7,7 @@ import { defaultSettings, normalizeSettings, SETTINGS_KEY, TRIP_KEY, FEED_KEY, t
 import { useGetCompanionFeeds, getGetCompanionFeedsQueryKey } from '@workspace/api-client-react';
 import { fetchFeed } from '@/lib/services';
 import { checkForChanges } from '@/lib/monitor';
+import { stopTripBackgroundLocation, syncTripBackgroundLocation } from '@/lib/location';
 
 const useCompanionValue = () => {
   const [settings, setSettings] = useState<Settings>(defaultSettings);
@@ -28,7 +29,11 @@ const useCompanionValue = () => {
         const t = saved[1][1] ? JSON.parse(saved[1][1]) as Trip : null;
         const cache = saved[2][1] ? JSON.parse(saved[2][1]) as Feed : null;
         if (cancelled) return;
-        const migrated = normalizeSettings(s);
+        const normalized = normalizeSettings(s);
+        const migrated = isCurrentTrip(t) ? normalized : { ...normalized, tripBackgroundLocation: false };
+        if (migrated.tripBackgroundLocation !== normalized.tripBackgroundLocation) {
+          await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(migrated));
+        }
         settingsRef.current = migrated;
         setSettings(migrated); setTrip(isCurrentTrip(t) ? t : null);
         if (cache?.incidents && cache.fetchedAt) client.setQueryData(['rfs-incidents'], cache, { updatedAt: cache.fetchedAt });
@@ -54,6 +59,11 @@ const useCompanionValue = () => {
     const sub = AppState.addEventListener('change', state => { if (state === 'active') run(); });
     return () => { clearInterval(timer); sub.remove(); };
   }, [ready, settings, trip]);
+  useEffect(() => {
+    if (!ready || Platform.OS === 'web') return;
+    const enabled = settings.notifications && settings.currentLocationAlerts && settings.tripBackgroundLocation && isCurrentTrip(trip);
+    void syncTripBackgroundLocation(enabled).catch(error => setMonitorError(error instanceof Error ? error.message : 'Trip Watch background location could not start.'));
+  }, [ready, settings.notifications, settings.currentLocationAlerts, settings.tripBackgroundLocation, trip?.startedAt]);
   async function saveSettings(update: Partial<Settings> | ((current: Settings) => Partial<Settings>)) {
     if (!ready || storageError) throw new Error(storageError || 'Preferences are still loading.');
     const operation = saveQueue.current.catch(() => undefined).then(async () => {
@@ -78,6 +88,10 @@ const useCompanionValue = () => {
   }
   async function saveTrip(next: Trip | null) {
     if (!ready || storageError) throw new Error(storageError || 'Preferences are still loading.');
+    if (!next) {
+      await stopTripBackgroundLocation();
+      if (settingsRef.current.tripBackgroundLocation) await saveSettings({ tripBackgroundLocation: false });
+    }
     if (next) await AsyncStorage.setItem(TRIP_KEY, JSON.stringify(next));
     else await AsyncStorage.removeItem(TRIP_KEY);
     setTrip(next);

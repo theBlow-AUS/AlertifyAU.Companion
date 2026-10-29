@@ -9,8 +9,10 @@ import { alertHazardOptions } from '@/lib/model';
 import { useColors } from '@/hooks/useColors';
 import { fonts } from '@/constants/colors';
 import { WatchAddresses } from '@/components/WatchAddresses';
+import { CurrentLocationAlerts } from '@/components/CurrentLocationAlerts';
 import { AdvisoryThresholds } from '@/components/AdvisoryThresholds';
 import { privacyPolicy } from '@/lib/privacy-policy';
+import { stopTripBackgroundLocation } from '@/lib/location';
 
 export default function Preferences() {
   const c = useColors();
@@ -21,8 +23,11 @@ export default function Preferences() {
     setBusy(true); setError('');
     try {
       if (enabled) await enableNotifications();
-      else if (settings.background) await setBackgroundChecks(false);
-      await saveSettings({ notifications: enabled, ...(!enabled ? { background: false } : {}) });
+      else {
+        if (settings.background) await setBackgroundChecks(false);
+        if (settings.tripBackgroundLocation) await stopTripBackgroundLocation();
+      }
+      await saveSettings({ notifications: enabled, ...(!enabled ? { background: false, tripBackgroundLocation: false } : {}) });
     } catch (e) { setError(errorMessage(e)); } finally { setBusy(false); }
   }
   async function background(enabled: boolean) {
@@ -55,6 +60,7 @@ export default function Preferences() {
       {!!monitorError && <Notice error>{monitorError}</Notice>}
       {Platform.OS !== 'web' && <Button title="Open phone permission settings" icon="settings" secondary onPress={() => void Linking.openSettings().catch(reportError)} />}
     </View>
+    <CurrentLocationAlerts />
     <View style={ui.card} testID="hazard-alert-preferences">
       <Text style={ui.h2}>Choose alert sources</Text>
       <Text style={ui.small}>Selected feeds can alert for enabled watch zones and your active trip. Turn on-device notifications above to receive phone alerts. Source pages remain available when a source is switched off.</Text>
@@ -68,7 +74,7 @@ export default function Preferences() {
     <View style={ui.card}><Text style={ui.h2}>Navigation preference</Text><Text style={ui.text}>{settings.navigationApp ?? 'Ask on each trip'}</Text><Text style={ui.small}>A choice is remembered only after you opt in on the Trip Watch screen.</Text>{settings.navigationApp && <Button title="Forget preferred app" icon="x" secondary onPress={() => void saveSettings({ navigationApp: null }).catch(reportError)} />}</View>
     <View style={ui.card}>
       <Text style={ui.label}>Alertify.au Companion</Text><Text style={ui.h2}>Awareness, not alarm.</Text>
-      <Text style={ui.small}>Saved places, alert settings and trip estimates stay on your device. Selected alert checks send watch coordinates or route samples to Alertify and its listed data sources. Address searches go to Nominatim and routes to OSRM. Notifications are scheduled locally; there is no account or remote push token.</Text>
+      <Text style={ui.small}>Saved places, alert settings and trip estimates stay on your device. Selected alert checks send watch coordinates, route samples or current-position coordinates to Alertify and its listed data sources. Current-location checks store only the last location/check timestamps and status, not a location history. Address searches go to Nominatim and routes to OSRM. Notifications are scheduled locally; there is no account or remote push token.</Text>
       <Text style={ui.small}>Alert feeds: NSW RFS, fire danger ratings, TfNSW, BOM, SES and Xweather Lightning, Hail Threats, Wind and Rain. Radar: RainViewer. Checks are periodic and source-dependent, not continuous monitoring. Some feeds are statewide or lack a usable location. Sources may be incomplete or unavailable. Call 000 in an emergency.</Text>
       <Button title="Open Alertify.au" icon="external-link" secondary onPress={() => void openUrl('https://alertify.au')} />
       <Button title="Privacy policy" icon="shield" secondary onPress={() => void openUrl(privacyPolicy.url)} />

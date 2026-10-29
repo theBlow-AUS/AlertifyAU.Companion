@@ -15,7 +15,7 @@ const weatherHazards = new Set<WeatherHazardKey>(['lightning', 'hail', 'wind', '
 const isWeatherHazard = (key: AlertHazardKey): key is WeatherHazardKey => weatherHazards.has(key as WeatherHazardKey);
 const reportSources = ['tfnsw', 'bom', 'ses'] as const;
 
-function scopesFor(settings: Settings, trip: Trip | null): Scope[] {
+function scopesFor(settings: Settings, trip: Trip | null, currentLocation?: Pick<Place, 'latitude' | 'longitude'> | null): Scope[] {
   const scopes: Scope[] = [];
   if (settings.watch) for (const watch of settings.watches.filter(w => w.enabled)) scopes.push({
     id: `watch:${watch.id}`, label: watch.label,
@@ -29,6 +29,16 @@ function scopesFor(settings: Settings, trip: Trip | null): Scope[] {
       id: `trip:${trip.startedAt}`, label: `Trip · ${trip.start.name} to ${trip.destination.name}`,
       signature: JSON.stringify([trip.coordinates, settings.tripLevel]),
       place: null, path: trip.coordinates, radius: 5, level: settings.tripLevel, points,
+    });
+  }
+  if (settings.currentLocationAlerts && currentLocation) {
+    const level = isCurrentTrip(trip) ? settings.tripLevel : settings.homeLevel;
+    scopes.push({
+      id: 'current-location',
+      label: `Current location · ${settings.currentLocationRadiusKm} km`,
+      signature: JSON.stringify([settings.currentLocationRadiusKm, level]),
+      place: currentLocation, path: null, radius: settings.currentLocationRadiusKm, level,
+      points: [currentLocation],
     });
   }
   return scopes;
@@ -46,9 +56,19 @@ function hazardSnapshot(scope: Scope, source: HazardNotice['source'], alerts: Ha
 }
 const advisoryThreshold = (settings: Settings, source: WeatherHazardKey) => source === 'wind'
   ? settings.windGustThresholdKph : source === 'rain' ? settings.rainThresholdMmH : undefined;
-export async function collectHazardSnapshots(settings: Settings, trip: Trip | null) {
+export async function collectHazardSnapshots(settings: Settings, trip: Trip | null, currentLocation?: Pick<Place, 'latitude' | 'longitude'> | null) {
   const snapshots: HazardScopeSnapshot[] = [], errors: string[] = [];
-  const scopes = scopesFor(settings, trip);
+  const scopes = scopesFor(settings, trip, currentLocation);
+  if (!settings.currentLocationAlerts) {
+    for (const source of ['fireDanger', ...reportSources, 'lightning', 'hail', 'wind', 'rain'] as const) {
+      snapshots.push({
+        id: `current-location:${source}`,
+        label: 'Current location',
+        signature: `disabled:${source}`,
+        alerts: [],
+      });
+    }
+  }
   if (!scopes.length) return { snapshots, errors };
 
   const needsFeeds = settings.alertHazards.fireDanger || reportSources.some(key => settings.alertHazards[key]);

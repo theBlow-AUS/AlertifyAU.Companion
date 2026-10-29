@@ -13,7 +13,8 @@
       "supportsTablet": false,
       "infoPlist": {
         "LSApplicationQueriesSchemes": ["comgooglemaps", "waze"],
-        "NSLocationWhenInUseUsageDescription": "Alertify.au Companion uses your location only when you choose to check fire danger, save a watch address, or select a trip starting point."
+        "NSLocationWhenInUseUsageDescription": "Alertify.au Companion uses your location when you opt in to nearby hazard alerts, check fire danger, save a watch address, or choose a trip starting point.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "If you opt in on the Trip Watch screen, Alertify.au Companion uses location in the background during an active Trip Watch to check hazards near you."
       }
     },
     "android": {},
@@ -25,7 +26,13 @@
       "expo-router",
       "expo-background-task",
       ["expo-splash-screen", { "image": "./assets/images/companion-icon.png", "backgroundColor": "#1b2b37", "resizeMode": "contain" }],
-      ["expo-location", { "locationWhenInUsePermission": "Alertify.au Companion uses your location only when you choose to save home or select a trip starting point." }],
+      ["expo-location", {
+        "locationWhenInUsePermission": "Alertify.au Companion uses your location when you opt in to nearby hazard alerts, check fire danger, save a watch address, or choose a trip starting point.",
+        "locationAlwaysAndWhenInUsePermission": "If you opt in on the Trip Watch screen, Alertify.au Companion uses location in the background during an active Trip Watch to check hazards near you.",
+        "isIosBackgroundLocationEnabled": true,
+        "isAndroidBackgroundLocationEnabled": true,
+        "isAndroidForegroundServiceEnabled": true
+      }],
       ["expo-notifications", { "defaultChannel": "default", "color": "#287bb6" }]
     ],
     "experiments": {

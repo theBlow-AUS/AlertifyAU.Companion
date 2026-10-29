@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { Alert, Linking, Pressable, Text, TextInput, View } from 'react-native';
+import { Alert, Linking, Pressable, Switch, Text, TextInput, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useCompanion } from '@/contexts/CompanionContext';
 import { useColors } from '@/hooks/useColors';
 import { fonts } from '@/constants/colors';
 import { Button, Diagram, IncidentRow, Notice, Screen, Sensitivity, confirmAction, errorMessage, reportError, ui } from '@/components/BrandUI';
-import { currentPlace } from '@/lib/location';
+import { currentPlace, enableTripBackgroundLocation, stopTripBackgroundLocation, syncTripBackgroundLocation } from '@/lib/location';
 import { estimateRoute, searchPlaces } from '@/lib/services';
 import { openNavigation } from '@/lib/navigation';
 import { type NavigationApp, type Place, type RouteEstimate, navigationUrl, routeDistance, timeAgo } from '@/lib/model';
@@ -21,6 +21,8 @@ export default function Trips() {
   const [estimate, setEstimate] = useState<RouteEstimate | null>(null);
   const [app, setApp] = useState<NavigationApp>(settings.navigationApp ?? 'Google Maps');
   const [remember, setRemember] = useState(false);
+  const [tripBackgroundOptIn, setTripBackgroundOptIn] = useState(settings.tripBackgroundLocation && !!trip);
+  const [tripLocationBusy, setTripLocationBusy] = useState(false);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const shownRoute = estimate ?? (destination ? null : trip);
@@ -43,18 +45,47 @@ export default function Trips() {
   }
   async function handoff(route: RouteEstimate | null, dest: Place) {
     setBusy('handoff'); setError('');
+    const previousTripBackground = settings.tripBackgroundLocation;
     try {
       const chosenApp = remember ? app : settings.navigationApp ?? app;
       if (remember) await saveSettings({ navigationApp: app });
       // Persist before the app is backgrounded by the handoff, then restore on failure.
+      const startBackgroundLocation = !!route && tripBackgroundOptIn && settings.currentLocationAlerts && settings.notifications;
+      await saveSettings({ tripBackgroundLocation: startBackgroundLocation });
       await saveTrip(route ? { ...route, startedAt: Date.now() } : null);
+      await syncTripBackgroundLocation(startBackgroundLocation);
       try { await openNavigation(chosenApp, dest, route?.start); }
-      catch (openError) { await saveTrip(trip); throw openError; }
+      catch (openError) {
+        await saveTrip(trip);
+        const restoreBackgroundLocation = !!trip && previousTripBackground && settings.currentLocationAlerts && settings.notifications;
+        await saveSettings({ tripBackgroundLocation: restoreBackgroundLocation });
+        await syncTripBackgroundLocation(restoreBackgroundLocation);
+        throw openError;
+      }
     } catch (e) { setError(errorMessage(e)); } finally { setBusy(''); }
+  }
+  async function setTripBackground(enabled: boolean) {
+    setTripLocationBusy(true); setError('');
+    try {
+      if (enabled) {
+        if (!settings.notifications || !settings.currentLocationAlerts) {
+          throw new Error('Turn on-device notifications and current-location alerts on before enabling Trip Watch background location.');
+        }
+        await enableTripBackgroundLocation();
+      } else {
+        await stopTripBackgroundLocation();
+      }
+      setTripBackgroundOptIn(enabled);
+      if (trip) {
+        await saveSettings({ tripBackgroundLocation: enabled });
+        if (enabled) await syncTripBackgroundLocation(true);
+      }
+    } catch (e) { setError(errorMessage(e)); }
+    finally { setTripLocationBusy(false); }
   }
   return <Screen><View style={ui.content}>
     <View><Text style={ui.label}>Know before you go</Text><Text style={[ui.title, { marginTop: 6 }]}>Trip Watch</Text><Text style={[ui.small, { marginTop: 7 }]}>Alertify checks incident proximity. Your preferred navigation app handles the drive.</Text></View>
-    {trip && !estimate && <View style={ui.card}><View style={ui.spread}><Text style={ui.h2}>Trip Watch saved</Text><Feather name="radio" size={19} color={c.success} /></View><Text style={ui.text}>{trip.destination.name}</Text><Text style={ui.small}>Checks the saved route estimate, not your navigation app’s live route. {settings.background ? 'Background checks are system-scheduled.' : 'Checks run while Alertify is open.'} Ends after 24 hours unless you end it first.</Text><Button title="End Trip Watch" secondary icon="x" onPress={() => void saveTrip(null).catch(reportError)} /></View>}
+    {trip && !estimate && <View style={ui.card}><View style={ui.spread}><Text style={ui.h2}>Trip Watch saved</Text><Feather name="radio" size={19} color={c.success} /></View><Text style={ui.text}>{trip.destination.name}</Text><Text style={ui.small}>Checks the saved route estimate, not your navigation app’s live route. {settings.background ? 'Background checks are system-scheduled.' : 'Checks run while Alertify is open.'} Ends after 24 hours unless you end it first.</Text><Button title="End Trip Watch" secondary icon="x" onPress={() => { setTripBackgroundOptIn(false); void saveTrip(null).catch(reportError); }} /></View>}
     <View style={ui.card}>
       <Text style={ui.label}>Starting point</Text><Text style={ui.h2}>{start?.name ?? 'Choose a starting point'}</Text>{start && <Text style={ui.small}>{start.detail}</Text>}
       <Button title="Use my current location" icon="navigation" secondary busy={busy === 'location'} disabled={!!busy && busy !== 'location'} onPress={() => void locate()} />
@@ -70,6 +101,24 @@ export default function Trips() {
     </View>
     {!!error && <Notice error>{error}</Notice>}
     {shownRoute && <View style={{ gap: 14 }}>
+      <View style={ui.card}>
+        <View style={ui.spread}>
+          <View style={{ flex: 1, gap: 4 }}>
+            <Text style={ui.h2}>Check while using navigation</Text>
+            <Text style={ui.small}>Optional background location during this Trip Watch</Text>
+          </View>
+          <Switch
+            accessibilityLabel="Enable background location for this Trip Watch"
+            value={tripBackgroundOptIn}
+            onValueChange={value => void setTripBackground(value)}
+            disabled={tripLocationBusy || busy === 'handoff' || !settings.notifications || !settings.currentLocationAlerts}
+            trackColor={{ true: c.success, false: c.border }}
+          />
+        </View>
+        <Text style={ui.small}>When enabled, Alertify checks your current position and selected feeds while you use another app. Location updates stop when Trip Watch ends or you turn this off. iOS and Android can delay or stop background work; no alert is guaranteed.</Text>
+        {(!settings.notifications || !settings.currentLocationAlerts) && <Notice>Turn on-device notifications and current-location alerts in Settings to enable this option.</Notice>}
+        {tripLocationBusy && <Text style={ui.small}>Requesting location permission…</Text>}
+      </View>
       <Diagram coordinates={shownRoute.coordinates} points={[shownRoute.start, shownRoute.destination]} />
       <Notice>RFS incident coverage is NSW only. Weather is checked separately at query points along this estimate; neither makes an interstate route fully assessed.</Notice>
       <View style={ui.spread}><Text style={ui.h2}>{Math.round(shownRoute.distance)} km estimated</Text><Text style={ui.small}>{Math.round(shownRoute.duration)} min · no live traffic</Text></View>

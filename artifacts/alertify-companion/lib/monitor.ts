@@ -1,12 +1,15 @@
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import * as BackgroundTask from 'expo-background-task';
 import * as TaskManager from 'expo-task-manager';
-import { SETTINGS_KEY, TRIP_KEY, MONITOR_KEY, normalizeSettings, type Trip, distance, routeDistance, matchesLevel, isCurrentTrip } from './model';
+import * as Location from 'expo-location';
+import { SETTINGS_KEY, TRIP_KEY, MONITOR_KEY, LIVE_LOCATION_STATUS_KEY, TRIP_LOCATION_TASK, normalizeSettings, type LiveLocationStatus, type Trip, distance, routeDistance, matchesLevel, isCurrentTrip } from './model';
 import { fetchFeed } from './services';
 import { advanceHazardMonitor, advanceMonitor, type HazardMonitorState, type MonitorState } from './monitor-state';
 import { collectHazardSnapshots } from './hazard-monitor';
+import { getCurrentLocationFix, stopTripBackgroundLocation } from './location';
+import { updateLiveLocationStatus } from './live-location-status';
 
 const TASK = 'alertify-companion-incident-check';
 const HAZARD_MONITOR_KEY = 'alertify.hazard-alert-monitor.v1';
@@ -18,9 +21,22 @@ if (Platform.OS !== 'web') {
 // Establish a baseline before issuing notifications, and only notify for a new
 // incident or a warning-level change. Timestamp-only feed edits do not re-alert.
 let pendingCheck: Promise<void> | null = null;
-export function checkForChanges(): Promise<void> {
-  if (pendingCheck) return pendingCheck;
-  pendingCheck = runCheck().finally(() => { pendingCheck = null; });
+let latestCurrentLocation: Location.LocationObject | null = null;
+let queuedCurrentLocation: Location.LocationObject | null = null;
+export function checkForChanges(locationFix?: Location.LocationObject): Promise<void> {
+  if (locationFix) latestCurrentLocation = locationFix;
+  if (pendingCheck) {
+    if (locationFix) queuedCurrentLocation = locationFix;
+    return pendingCheck;
+  }
+  pendingCheck = runCheck().finally(() => {
+    pendingCheck = null;
+    if (queuedCurrentLocation) {
+      const queued = queuedCurrentLocation;
+      queuedCurrentLocation = null;
+      void checkForChanges(queued);
+    }
+  });
   return pendingCheck;
 }
 async function runCheck() {
@@ -33,13 +49,31 @@ async function runCheck() {
   if (!permission.granted) throw new Error('Notifications are blocked in phone settings. Incident information is still available in the app.');
   const storedTrip = await AsyncStorage.getItem(TRIP_KEY);
   const trip = storedTrip ? JSON.parse(storedTrip) as Trip : null;
+  let currentFix = latestCurrentLocation;
+  let locationError: string | null = null;
+  let currentPoint: { latitude: number; longitude: number } | null = null;
+  if (settings.currentLocationAlerts) {
+    const maxAccuracy = Math.min(5000, settings.currentLocationRadiusKm * 250);
+    if (currentFix && (Date.now() - currentFix.timestamp > 120_000 || (currentFix.coords.accuracy ?? Infinity) > maxAccuracy)) currentFix = null;
+    if (!currentFix && AppState.currentState === 'active') {
+      try { currentFix = await getCurrentLocationFix(maxAccuracy); }
+      catch (error) { locationError = error instanceof Error ? error.message : 'A fresh device location is unavailable.'; }
+    }
+    if (currentFix && Date.now() - currentFix.timestamp <= 120_000 && (currentFix.coords.accuracy ?? Infinity) <= maxAccuracy) {
+      latestCurrentLocation = currentFix;
+      currentPoint = { latitude: currentFix.coords.latitude, longitude: currentFix.coords.longitude };
+    } else {
+      currentFix = null;
+      locationError ??= 'A fresh, accurate location is unavailable. Nearby-current-location checks are paused.';
+    }
+  }
   const [feedResult, sourceResult] = await Promise.allSettled([
-    fetchFeed(), collectHazardSnapshots(settings, trip),
+    fetchFeed(), collectHazardSnapshots(settings, trip, currentPoint),
   ]);
   const feed = feedResult.status === 'fulfilled' ? feedResult.value : null;
   const old = await AsyncStorage.getItem(MONITOR_KEY);
   const previous = old ? JSON.parse(old) as MonitorState : null;
-  const advanced = feed ? advanceMonitor(settings, trip, feed.incidents, previous) : null;
+  const advanced = feed ? advanceMonitor(settings, trip, feed.incidents, previous, currentPoint) : null;
   const oldHazards = await AsyncStorage.getItem(HAZARD_MONITOR_KEY);
   const previousHazards = oldHazards ? JSON.parse(oldHazards) as HazardMonitorState : null;
   const checkedSources = sourceResult.status === 'fulfilled' ? sourceResult.value : { snapshots: [], errors: ['Selected hazard feeds could not be checked.'] };
@@ -47,9 +81,11 @@ async function runCheck() {
   const delivery = new Map<string, { title: string; body: string; data: Record<string, string> }>();
   if (advanced && settings.alertHazards.rfs) for (const incident of advanced.fresh.slice(0, 5)) {
     const names = settings.watch ? settings.watches.filter(w => w.enabled && distance(w.place, incident) <= w.radius).map(w => w.label) : [];
+    if (currentPoint && distance(currentPoint, incident) <= settings.currentLocationRadiusKm) names.push('Near your current location');
+    if (isCurrentTrip(trip) && routeDistance(incident, trip.coordinates) <= 5) names.push('Trip Watch route');
     delivery.set(`rfs:${incident.id}`, {
       title: `${incident.category} · ${incident.type}`,
-      body: `${names.length ? `${names.join(', ')} · ` : 'Trip Watch · '}${incident.title}. Check NSW RFS for current instructions.`,
+      body: `${names.length ? `${[...new Set(names)].join(', ')} · ` : 'Nearby · '}${incident.title}. Check NSW RFS for current instructions.`,
       data: { incidentId: incident.id, hazardSource: 'rfs' },
     });
   }
@@ -78,7 +114,14 @@ async function runCheck() {
   }
   if (advanced) await AsyncStorage.setItem(MONITOR_KEY, JSON.stringify({ ...advanced.state, checkedAt: Date.now() }));
   await AsyncStorage.setItem(HAZARD_MONITOR_KEY, JSON.stringify({ ...advancedHazards.state, checkedAt: Date.now() }));
-  const errors = [...(feedResult.status === 'rejected' ? ['NSW RFS incidents could not be checked.'] : []), ...checkedSources.errors];
+  const errors = [...(feedResult.status === 'rejected' ? ['NSW RFS incidents could not be checked.'] : []), ...checkedSources.errors, ...(locationError ? [locationError] : [])];
+  const previousStatusRaw = await AsyncStorage.getItem(LIVE_LOCATION_STATUS_KEY);
+  const previousStatus = previousStatusRaw ? JSON.parse(previousStatusRaw) as LiveLocationStatus : null;
+  await AsyncStorage.setItem(LIVE_LOCATION_STATUS_KEY, JSON.stringify({
+    lastLocationAt: currentPoint && currentFix ? currentFix.timestamp : previousStatus?.lastLocationAt ?? null,
+    lastCheckAt: Date.now(),
+    error: errors.length ? [...new Set(errors)].slice(0, 3).join(' ') : null,
+  }));
   if (errors.length) throw new Error([...new Set(errors)].slice(0, 3).join(' '));
 }
 if (Platform.OS !== 'web' && !TaskManager.isTaskDefined(TASK)) {
@@ -89,6 +132,38 @@ if (Platform.OS !== 'web' && !TaskManager.isTaskDefined(TASK)) {
       return BackgroundTask.BackgroundTaskResult.Success;
     }
     catch { return BackgroundTask.BackgroundTaskResult.Failed; }
+  });
+}
+if (Platform.OS !== 'web' && !TaskManager.isTaskDefined(TRIP_LOCATION_TASK)) {
+  TaskManager.defineTask(TRIP_LOCATION_TASK, async ({ data, error }) => {
+    if (error) {
+      await updateLiveLocationStatus({ error: 'The operating system could not provide a background location update.' });
+      return;
+    }
+    const locations = (data as { locations?: Location.LocationObject[] } | undefined)?.locations;
+    const latest = locations?.[locations.length - 1];
+    if (!latest) return;
+    latestCurrentLocation = latest;
+    try {
+      const saved = await AsyncStorage.getItem(SETTINGS_KEY);
+      const tripJson = await AsyncStorage.getItem(TRIP_KEY);
+      if (!saved || !tripJson) {
+        await stopTripBackgroundLocation();
+        return;
+      }
+      const settings = normalizeSettings(JSON.parse(saved));
+      const trip = JSON.parse(tripJson) as Trip;
+      if (!settings.notifications || !settings.currentLocationAlerts || !settings.tripBackgroundLocation || !isCurrentTrip(trip)) {
+        await stopTripBackgroundLocation();
+        return;
+      }
+      await checkForChanges(latest);
+    } catch (taskError) {
+      await updateLiveLocationStatus({
+        lastLocationAt: latest.timestamp,
+        error: taskError instanceof Error ? taskError.message : 'Background hazard checks could not complete.',
+      });
+    }
   });
 }
 export async function enableNotifications() {
