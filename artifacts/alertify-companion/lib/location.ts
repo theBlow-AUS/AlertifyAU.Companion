@@ -64,7 +64,10 @@ export async function stopTripBackgroundLocation() {
 export async function syncTripBackgroundLocation(enabled: boolean) {
   if (!enabled) return stopTripBackgroundLocation();
   const permission = await Location.getBackgroundPermissionsAsync();
-  if (!permission.granted) throw new Error('Background location permission is unavailable. Enable it from the Trip Watch screen.');
+  if (!permission.granted) {
+    await stopTripBackgroundLocation();
+    throw new Error('Background location permission is unavailable. Enable it from the Trip Watch screen.');
+  }
   await startTripBackgroundLocation();
 }
 

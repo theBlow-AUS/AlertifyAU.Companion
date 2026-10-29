@@ -10,6 +10,7 @@ import { advanceHazardMonitor, advanceMonitor, type HazardMonitorState, type Mon
 import { collectHazardSnapshots } from './hazard-monitor';
 import { getCurrentLocationFix, stopTripBackgroundLocation } from './location';
 import { updateLiveLocationStatus } from './live-location-status';
+import { isUsableLocation, shouldRunTripLocation } from './location-policy';
 
 const TASK = 'alertify-companion-incident-check';
 const HAZARD_MONITOR_KEY = 'alertify.hazard-alert-monitor.v1';
@@ -23,6 +24,7 @@ if (Platform.OS !== 'web') {
 let pendingCheck: Promise<void> | null = null;
 let latestCurrentLocation: Location.LocationObject | null = null;
 let queuedCurrentLocation: Location.LocationObject | null = null;
+let lastBackgroundLocationCheck = 0;
 export function checkForChanges(locationFix?: Location.LocationObject): Promise<void> {
   if (locationFix) latestCurrentLocation = locationFix;
   if (pendingCheck) {
@@ -34,7 +36,9 @@ export function checkForChanges(locationFix?: Location.LocationObject): Promise<
     if (queuedCurrentLocation) {
       const queued = queuedCurrentLocation;
       queuedCurrentLocation = null;
-      void checkForChanges(queued);
+      void checkForChanges(queued).catch(error => {
+        void updateLiveLocationStatus({ error: error instanceof Error ? error.message : 'A nearby hazard check failed.' }).catch(() => undefined);
+      });
     }
   });
   return pendingCheck;
@@ -54,12 +58,18 @@ async function runCheck() {
   let currentPoint: { latitude: number; longitude: number } | null = null;
   if (settings.currentLocationAlerts) {
     const maxAccuracy = Math.min(5000, settings.currentLocationRadiusKm * 250);
-    if (currentFix && (Date.now() - currentFix.timestamp > 120_000 || (currentFix.coords.accuracy ?? Infinity) > maxAccuracy)) currentFix = null;
-    if (!currentFix && AppState.currentState === 'active') {
+    const locationPermission = await Location.getForegroundPermissionsAsync();
+    if (!locationPermission.granted) {
+      currentFix = null;
+      latestCurrentLocation = null;
+      locationError = 'Location permission is off. Nearby-current-location checks are paused; review phone settings.';
+    }
+    if (!isUsableLocation(currentFix, settings.currentLocationRadiusKm)) currentFix = null;
+    if (!currentFix && locationPermission.granted && AppState.currentState === 'active') {
       try { currentFix = await getCurrentLocationFix(maxAccuracy); }
       catch (error) { locationError = error instanceof Error ? error.message : 'A fresh device location is unavailable.'; }
     }
-    if (currentFix && Date.now() - currentFix.timestamp <= 120_000 && (currentFix.coords.accuracy ?? Infinity) <= maxAccuracy) {
+    if (currentFix && isUsableLocation(currentFix, settings.currentLocationRadiusKm)) {
       latestCurrentLocation = currentFix;
       currentPoint = { latitude: currentFix.coords.latitude, longitude: currentFix.coords.longitude };
     } else {
@@ -153,10 +163,13 @@ if (Platform.OS !== 'web' && !TaskManager.isTaskDefined(TRIP_LOCATION_TASK)) {
       }
       const settings = normalizeSettings(JSON.parse(saved));
       const trip = JSON.parse(tripJson) as Trip;
-      if (!settings.notifications || !settings.currentLocationAlerts || !settings.tripBackgroundLocation || !isCurrentTrip(trip)) {
+      if (!shouldRunTripLocation(settings, trip)) {
         await stopTripBackgroundLocation();
         return;
       }
+      // iOS can batch location events. Avoid fetching every feed for each event.
+      if (Date.now() - lastBackgroundLocationCheck < 60_000) return;
+      lastBackgroundLocationCheck = Date.now();
       await checkForChanges(latest);
     } catch (taskError) {
       await updateLiveLocationStatus({

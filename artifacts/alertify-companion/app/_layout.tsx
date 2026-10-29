@@ -12,6 +12,7 @@ import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import * as Notifications from 'expo-notifications';
 import { CompanionProvider } from '@/contexts/CompanionContext';
+import { AlertPermissionSetup } from '@/components/AlertPermissionSetup';
 import colors from '@/constants/colors';
 import { setBaseUrl } from '@workspace/api-client-react';
 
@@ -33,6 +34,7 @@ function RootLayoutNav() {
     return () => subscription.remove();
   }, []);
   return <>
+    <AlertPermissionSetup />
     <StatusBar style="light" />
     <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.light.background } }}>
       <Stack.Screen name="(tabs)" />

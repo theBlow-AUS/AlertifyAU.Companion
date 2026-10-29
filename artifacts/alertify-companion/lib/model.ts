@@ -123,7 +123,7 @@ export const levels: { value: Level; label: string; detail: string }[] = [
 ];
 export const RFS_URL = 'https://www.rfs.nsw.gov.au/fire-information/fires-near-me';
 export const DANGER_URL = 'https://www.rfs.nsw.gov.au/fire-information/fdr-and-tobans';
-export const isCurrentTrip = (trip: Trip | null): trip is Trip => !!trip && Date.now() - trip.startedAt < 24 * 60 * 60 * 1000;
+export const isCurrentTrip = (trip: Trip | null, now = Date.now()): trip is Trip => !!trip && now - trip.startedAt < 24 * 60 * 60 * 1000;
 export function distance(a: Pick<Place, 'latitude' | 'longitude'>, b: Pick<Place, 'latitude' | 'longitude'>) {
   const rad = Math.PI / 180;
   const dlat = (b.latitude - a.latitude) * rad;

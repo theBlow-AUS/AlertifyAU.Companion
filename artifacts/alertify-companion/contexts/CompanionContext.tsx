@@ -8,6 +8,7 @@ import { useGetCompanionFeeds, getGetCompanionFeedsQueryKey } from '@workspace/a
 import { fetchFeed } from '@/lib/services';
 import { checkForChanges } from '@/lib/monitor';
 import { stopTripBackgroundLocation, syncTripBackgroundLocation } from '@/lib/location';
+import { shouldRunTripLocation } from '@/lib/location-policy';
 
 const useCompanionValue = () => {
   const [settings, setSettings] = useState<Settings>(defaultSettings);
@@ -61,9 +62,14 @@ const useCompanionValue = () => {
   }, [ready, settings, trip]);
   useEffect(() => {
     if (!ready || Platform.OS === 'web') return;
-    const enabled = settings.notifications && settings.currentLocationAlerts && settings.tripBackgroundLocation && isCurrentTrip(trip);
-    void syncTripBackgroundLocation(enabled).catch(error => setMonitorError(error instanceof Error ? error.message : 'Trip Watch background location could not start.'));
-  }, [ready, settings.notifications, settings.currentLocationAlerts, settings.tripBackgroundLocation, trip?.startedAt]);
+    const sync = () => {
+      void syncTripBackgroundLocation(shouldRunTripLocation(settings, trip)).catch(error =>
+        setMonitorError(error instanceof Error ? error.message : 'Trip Watch background location could not start.'));
+    };
+    sync();
+    const sub = AppState.addEventListener('change', state => { if (state === 'active') sync(); });
+    return () => sub.remove();
+  }, [ready, settings.notifications, settings.currentLocationAlerts, settings.tripBackgroundLocation, trip?.startedAt, isCurrentTrip(trip, clock)]);
   async function saveSettings(update: Partial<Settings> | ((current: Settings) => Partial<Settings>)) {
     if (!ready || storageError) throw new Error(storageError || 'Preferences are still loading.');
     const operation = saveQueue.current.catch(() => undefined).then(async () => {

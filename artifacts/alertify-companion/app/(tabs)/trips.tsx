@@ -53,8 +53,10 @@ export default function Trips() {
       const startBackgroundLocation = !!route && tripBackgroundOptIn && settings.currentLocationAlerts && settings.notifications;
       await saveSettings({ tripBackgroundLocation: startBackgroundLocation });
       await saveTrip(route ? { ...route, startedAt: Date.now() } : null);
-      await syncTripBackgroundLocation(startBackgroundLocation);
-      try { await openNavigation(chosenApp, dest, route?.start); }
+      try {
+        await syncTripBackgroundLocation(startBackgroundLocation);
+        await openNavigation(chosenApp, dest, route?.start);
+      }
       catch (openError) {
         await saveTrip(trip);
         const restoreBackgroundLocation = !!trip && previousTripBackground && settings.currentLocationAlerts && settings.notifications;
@@ -85,7 +87,7 @@ export default function Trips() {
   }
   return <Screen><View style={ui.content}>
     <View><Text style={ui.label}>Know before you go</Text><Text style={[ui.title, { marginTop: 6 }]}>Trip Watch</Text><Text style={[ui.small, { marginTop: 7 }]}>Alertify checks incident proximity. Your preferred navigation app handles the drive.</Text></View>
-    {trip && !estimate && <View style={ui.card}><View style={ui.spread}><Text style={ui.h2}>Trip Watch saved</Text><Feather name="radio" size={19} color={c.success} /></View><Text style={ui.text}>{trip.destination.name}</Text><Text style={ui.small}>Checks the saved route estimate, not your navigation app’s live route. {settings.background ? 'Background checks are system-scheduled.' : 'Checks run while Alertify is open.'} Ends after 24 hours unless you end it first.</Text><Button title="End Trip Watch" secondary icon="x" onPress={() => { setTripBackgroundOptIn(false); void saveTrip(null).catch(reportError); }} /></View>}
+    {trip && !estimate && <View style={ui.card}><View style={ui.spread}><Text style={ui.h2}>Trip Watch saved</Text><Feather name="radio" size={19} color={c.success} /></View><Text style={ui.text}>{trip.destination.name}</Text><Text style={ui.small}>Checks the saved route estimate, not your navigation app’s live route. {settings.tripBackgroundLocation ? 'Background location checks are enabled, subject to phone permissions and operating-system limits.' : settings.background ? 'Background checks are system-scheduled.' : 'Checks run while Alertify is open.'} Ends after 24 hours unless you end it first.</Text><Button title="End Trip Watch" secondary icon="x" onPress={() => { setTripBackgroundOptIn(false); void saveTrip(null).catch(reportError); }} /></View>}
     <View style={ui.card}>
       <Text style={ui.label}>Starting point</Text><Text style={ui.h2}>{start?.name ?? 'Choose a starting point'}</Text>{start && <Text style={ui.small}>{start.detail}</Text>}
       <Button title="Use my current location" icon="navigation" secondary busy={busy === 'location'} disabled={!!busy && busy !== 'location'} onPress={() => void locate()} />

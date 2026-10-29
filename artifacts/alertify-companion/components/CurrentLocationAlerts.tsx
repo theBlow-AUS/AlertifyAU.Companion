@@ -9,7 +9,7 @@ import { errorMessage, Notice, ui } from './BrandUI';
 
 export function CurrentLocationAlerts() {
   const c = useColors();
-  const { settings, saveSettings, monitorError } = useCompanion();
+  const { settings, trip, saveSettings, monitorError } = useCompanion();
   const [radiusDraft, setRadiusDraft] = useState(settings.currentLocationRadiusKm);
   const radiusRef = useRef(radiusDraft);
   const [trackWidth, setTrackWidth] = useState(0);
@@ -19,10 +19,13 @@ export function CurrentLocationAlerts() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const disabled = !settings.notifications || busy;
+  const trackLeft = useRef(0);
 
   useEffect(() => {
     let live = true;
-    const refresh = () => { void readLiveLocationStatus().then(next => { if (live) setStatus(next); }); };
+    const refresh = () => { void readLiveLocationStatus().then(next => { if (live) setStatus(next); }).catch(() => {
+      if (live) setError('The last-check status could not be read. Reopen the app to try again.');
+    }); };
     refresh();
     const timer = setInterval(refresh, 10_000);
     return () => { live = false; clearInterval(timer); };
@@ -45,8 +48,11 @@ export function CurrentLocationAlerts() {
   const responder = useMemo(() => PanResponder.create({
     onStartShouldSetPanResponder: () => true,
     onMoveShouldSetPanResponder: (_, gesture) => Math.abs(gesture.dx) > Math.abs(gesture.dy),
-    onPanResponderGrant: event => updateDraft(radiusFromX(event.nativeEvent.locationX)),
-    onPanResponderMove: event => updateDraft(radiusFromX(event.nativeEvent.locationX)),
+    onPanResponderGrant: event => {
+      trackLeft.current = event.nativeEvent.pageX - event.nativeEvent.locationX;
+      updateDraft(radiusFromX(event.nativeEvent.locationX));
+    },
+    onPanResponderMove: event => updateDraft(radiusFromX(event.nativeEvent.pageX - trackLeft.current)),
     onPanResponderRelease: () => { void saveRadius(); },
     onPanResponderTerminate: () => { void saveRadius(); },
   }), [trackWidth, settings.notifications]);
@@ -65,6 +71,7 @@ export function CurrentLocationAlerts() {
     finally { setBusy(false); }
   }
   async function adjustForAccessibility(actionName: string) {
+    if (!settings.notifications || busy) return;
     const delta = actionName === 'increment' ? 1 : -1;
     updateDraft(radiusRef.current + delta);
     try { await saveSettings({ currentLocationRadiusKm: radiusRef.current }); }
@@ -76,7 +83,9 @@ export function CurrentLocationAlerts() {
       ? `Last location ${timeAgo(status.lastLocationAt)} · stale`
       : `Location updated ${timeAgo(status.lastLocationAt)}`
     : 'Waiting for a fresh location fix';
-  const checkText = status.lastCheckAt ? `Last checked ${timeAgo(status.lastCheckAt)}` : 'No location check recorded yet';
+  const checkText = status.lastCheckAt
+    ? `Last checked ${timeAgo(status.lastCheckAt)}${Date.now() - status.lastCheckAt > 300_000 ? ' · stale; reopen Alertify to check again' : ''}`
+    : 'No location check recorded yet';
   const statusError = status.error || monitorError;
 
   return <View style={ui.card} testID="current-location-alerts">
@@ -93,11 +102,12 @@ export function CurrentLocationAlerts() {
         trackColor={{ true: c.success, false: c.border }}
       />
     </View>
-    <Text style={ui.small}>Radius: {radiusDraft} km · 1–50 km. Uses {settings.tripBackgroundLocation ? 'Trip' : 'Home'} alert sensitivity. This is a periodic check, not continuous monitoring.</Text>
+    <Text style={ui.small}>Radius: {radiusDraft} km · 1–50 km. Uses {trip ? 'Trip' : 'Home'} alert sensitivity. This is a periodic check, not continuous monitoring.</Text>
     <View
       accessible
       accessibilityRole="adjustable"
       accessibilityLabel="Current-location alert radius"
+      accessibilityState={{ disabled: !settings.notifications || busy }}
       accessibilityValue={{ min: currentLocationRadiusLimits.min, max: currentLocationRadiusLimits.max, now: radiusDraft, text: `${radiusDraft} km` }}
       accessibilityActions={[{ name: 'increment', label: 'Increase radius' }, { name: 'decrement', label: 'Decrease radius' }]}
       onAccessibilityAction={event => { void adjustForAccessibility(event.nativeEvent.actionName); }}

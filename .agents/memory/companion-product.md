@@ -33,6 +33,12 @@ Support multiple named watch addresses. Match fire danger to the selected addres
 
 **How to apply:** Keep fire rating values and district context in-app rather than replacing them with an external link. Prefer Alertify's existing public feed connections and expose upstream outages honestly.
 
+Hazard notifications should use on-device checks and locally scheduled notifications, not a remote push service or server-side user/location profiles.
+
+**Why:** The user selected “On-device checks” when choosing the notification model.
+
+**How to apply:** Preserve explicit consent for location monitoring and individual hazard feeds. Background execution is best-effort, not guaranteed continuous monitoring. Local matching does not mean location-bearing feed requests never leave the phone.
+
 The user also requested Xweather Lightning, Live Weather Radar, Xweather Hail Threats, Xweather Wind and Xweather Rain for watch zones and trip routing.
 
 **Why:** The user asked to add these sources to the zone/trip experience, not just as a separate generic feed list.

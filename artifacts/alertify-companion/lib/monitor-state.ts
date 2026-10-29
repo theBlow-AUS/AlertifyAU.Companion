@@ -66,6 +66,15 @@ export function advanceMonitor(
   const next: MonitorState = { scopes: {} };
   const fresh = new Map<string, Incident>();
   const activeScopeIds = new Set(scopes.map(scope => scope.id));
+  // A missing fix is an unavailable check, not an all-clear or an opt-out.
+  // Keep the last successful baseline so movement during a GPS outage can alert
+  // when a fresh fix returns. Explicit opt-out still removes this scope below.
+  const pausedLocation = settings.currentLocationAlerts && !currentLocation
+    ? previous?.scopes?.['current-location'] : undefined;
+  if (pausedLocation) {
+    next.scopes['current-location'] = pausedLocation;
+    activeScopeIds.add('current-location');
+  }
   const previouslySeen = new Set(Object.entries(previous?.scopes ?? {}).filter(([scopeId]) => activeScopeIds.has(scopeId)).flatMap(([, scope]) => scope.seen));
   for (const scope of scopes) {
     const seen = scope.matches.map(i => `${i.id}:${i.category}`);
