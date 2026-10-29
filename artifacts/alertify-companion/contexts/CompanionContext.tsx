@@ -45,6 +45,11 @@ const useCompanionValue = () => {
   }, [client]);
   const feed = useQuery({ queryKey: ['rfs-incidents'], queryFn: fetchFeed, enabled: ready, refetchInterval: 60000, staleTime: 30000, retry: 1 });
   const feeds = useGetCompanionFeeds({ query: { queryKey: getGetCompanionFeedsQueryKey(), enabled: ready, refetchInterval: 120000, staleTime: 60000, retry: 1 } });
+  function runMonitorCheck(forceRerun = false) {
+    void checkForChanges(undefined, forceRerun)
+      .then(() => setMonitorError(''))
+      .catch(error => setMonitorError(error instanceof Error ? error.message : 'The on-device alert check failed. Check your connection.'));
+  }
   useEffect(() => {
     const timer = setInterval(() => setClock(Date.now()), 30000);
     const sub = AppState.addEventListener('change', state => {
@@ -54,7 +59,7 @@ const useCompanionValue = () => {
   }, [client]);
   useEffect(() => {
     if (!ready || !settings.notifications) return;
-    const run = () => { checkForChanges().then(() => setMonitorError('')).catch(error => setMonitorError(error instanceof Error ? error.message : 'The on-device alert check failed. Check your connection.')); };
+    const run = () => runMonitorCheck();
     run();
     const timer = setInterval(run, 60000);
     const sub = AppState.addEventListener('change', state => { if (state === 'active') run(); });
@@ -101,6 +106,7 @@ const useCompanionValue = () => {
     if (next) await AsyncStorage.setItem(TRIP_KEY, JSON.stringify(next));
     else await AsyncStorage.removeItem(TRIP_KEY);
     setTrip(next);
+    runMonitorCheck(true);
   }
   const nearby = (feed.data?.incidents ?? []).filter(i => settings.home && distance(settings.home, i) <= settings.radius)
     .sort((a, b) => b.severity - a.severity || distance(settings.home!, a) - distance(settings.home!, b));

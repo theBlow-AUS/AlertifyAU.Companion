@@ -25,18 +25,26 @@ let pendingCheck: Promise<void> | null = null;
 let latestCurrentLocation: Location.LocationObject | null = null;
 let queuedCurrentLocation: Location.LocationObject | null = null;
 let lastBackgroundLocationCheck = 0;
-export function checkForChanges(locationFix?: Location.LocationObject): Promise<void> {
+let queuedCheck = false;
+export function checkForChanges(locationFix?: Location.LocationObject, forceRerun = false): Promise<void> {
   if (locationFix) latestCurrentLocation = locationFix;
   if (pendingCheck) {
     if (locationFix) queuedCurrentLocation = locationFix;
+    if (forceRerun) queuedCheck = true;
     return pendingCheck;
   }
   pendingCheck = runCheck().finally(() => {
     pendingCheck = null;
+    const rerun = queuedCheck;
+    queuedCheck = false;
     if (queuedCurrentLocation) {
       const queued = queuedCurrentLocation;
       queuedCurrentLocation = null;
       void checkForChanges(queued).catch(error => {
+        void updateLiveLocationStatus({ error: error instanceof Error ? error.message : 'A nearby hazard check failed.' }).catch(() => undefined);
+      });
+    } else if (rerun) {
+      void checkForChanges().catch(error => {
         void updateLiveLocationStatus({ error: error instanceof Error ? error.message : 'A nearby hazard check failed.' }).catch(() => undefined);
       });
     }
