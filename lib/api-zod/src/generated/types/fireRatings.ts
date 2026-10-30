@@ -7,6 +7,7 @@
  */
 import type { FireDistrict } from './fireDistrict';
 import type { FireRatingsStatus } from './fireRatingsStatus';
+import type { WarningFreshness } from './warningFreshness';
 
 export interface FireRatings {
   status: FireRatingsStatus;
@@ -16,5 +17,6 @@ export interface FireRatings {
   fetchedAt: string | null;
   /** @nullable */
   updatedAt: string | null;
+  freshness: WarningFreshness;
   districts: FireDistrict[];
 }

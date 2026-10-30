@@ -35,25 +35,28 @@ async function run() {
     for (const value of [limit.min, limit.max]) assert.equal(model.normalizeSettings({ [key]: value })[key], value);
   }
   const now = new Date().toISOString();
+  const currentFreshness = { status: 'current', maxAgeMinutes: 30, ageMinutes: 0 };
+  const staleFreshness = { status: 'stale', maxAgeMinutes: 30, ageMinutes: 31 };
   const feeds = {
-    fireRatings: { status: 'live', districts: [{ name: 'Greater Sydney Region', today: 'High', tomorrow: 'High', totalFireBan: true }] },
+    fireRatings: { status: 'live', freshness: currentFreshness, districts: [{ name: 'Greater Sydney Region', today: 'High', tomorrow: 'High', totalFireBan: true }] },
     sources: [
-      { id: 'tfnsw', name: 'TfNSW', status: 'live', reports: [
-        { id: 'near-road', title: 'Nearby closure', category: 'Changed traffic conditions', location: 'Sydney', latitude: -33.86, longitude: 151.2, severity: 0 },
-        { id: 'far-road', title: 'Distant closure', category: 'Changed traffic conditions', location: 'Dubbo', latitude: -32.25, longitude: 148.6, severity: 0 },
+      { id: 'tfnsw', name: 'TfNSW', status: 'live', freshness: currentFreshness, reports: [
+        { id: 'near-road', title: 'Nearby closure', category: 'Changed traffic conditions', location: 'Sydney', latitude: -33.86, longitude: 151.2, severity: 0, freshness: currentFreshness },
+        { id: 'far-road', title: 'Distant closure', category: 'Changed traffic conditions', location: 'Dubbo', latitude: -32.25, longitude: 148.6, severity: 0, freshness: currentFreshness },
+        { id: 'stale-road', title: 'Outdated closure', category: 'Changed traffic conditions', location: 'Sydney', latitude: -33.86, longitude: 151.2, severity: 0, freshness: staleFreshness },
       ] },
-      { id: 'bom', name: 'BOM', status: 'live', reports: [
-        { id: 'nsw-warning', title: 'Severe NSW warning', category: 'Weather warning', location: 'NSW warning feed', latitude: null, longitude: null, severity: 2 },
+      { id: 'bom', name: 'BOM', status: 'live', freshness: currentFreshness, reports: [
+        { id: 'nsw-warning', title: 'Severe NSW warning', category: 'Weather warning', location: 'NSW warning feed', latitude: null, longitude: null, severity: 2, freshness: currentFreshness },
       ] },
-      { id: 'ses', name: 'SES', status: 'live', reports: [
-        { id: 'near-ses', title: 'Local evacuation notice', category: 'Emergency Warning', location: 'Sydney', latitude: -33.86, longitude: 151.2, severity: 3 },
-        { id: 'unlocated-ses', title: 'Unlocated notice', category: 'Watch and Act', location: 'Area unavailable', latitude: null, longitude: null, severity: 2 },
+      { id: 'ses', name: 'SES', status: 'live', freshness: currentFreshness, reports: [
+        { id: 'near-ses', title: 'Local evacuation notice', category: 'Emergency Warning', location: 'Sydney', latitude: -33.86, longitude: 151.2, severity: 3, freshness: currentFreshness },
+        { id: 'unlocated-ses', title: 'Unlocated notice', category: 'Watch and Act', location: 'Area unavailable', latitude: null, longitude: null, severity: 2, freshness: currentFreshness },
       ] },
     ],
   };
   const weather = {
     fetchedAt: now,
-    sources: ['lightning', 'hail', 'wind', 'rain'].map(id => ({ id, status: 'live', availablePoints: 1 })),
+    sources: ['lightning', 'hail', 'wind', 'rain'].map(id => ({ id, status: 'live', freshness: currentFreshness, availablePoints: 1 })),
     events: [
       { id: 'near-lightning', kind: 'lightning', latitude: -33.86, longitude: 151.2, polygon: [], description: 'Nearby strike', validFrom: now, validTo: '' },
       { id: 'far-lightning', kind: 'lightning', latitude: -34.3, longitude: 150.9, polygon: [], description: 'Distant strike', validFrom: now, validTo: '' },
@@ -61,6 +64,7 @@ async function run() {
     ],
     samples: [
       { latitude: -33.86, longitude: 151.2, windTime: now, windGustKph: 95, rainTime: now, rainEnd: new Date(Date.now() + 3600000).toISOString(), rainPeakMmH: 25 },
+      { latitude: -33.86, longitude: 151.2, windTime: new Date(Date.now() - 31 * 60000).toISOString(), windGustKph: 150, rainTime: new Date(Date.now() - 16 * 60000).toISOString(), rainEnd: new Date(Date.now() + 3600000).toISOString(), rainPeakMmH: 50 },
       { latitude: -34.3, longitude: 150.9, windTime: now, windGustKph: 120, rainTime: now, rainEnd: now, rainPeakMmH: 40 },
     ],
   };
@@ -91,6 +95,7 @@ async function run() {
   assert.equal(checked.errors.length, 0);
   const alerts = new Map(checked.snapshots.map(snapshot => [snapshot.id.split(':').at(-1), snapshot.alerts]));
   assert.equal(JSON.stringify(alerts.get('tfnsw').map(alert => alert.id)), JSON.stringify(['near-road:Changed traffic conditions']));
+  assert.equal(alerts.get('tfnsw').some(alert => alert.id.startsWith('stale-road')), false, 'Stale warning records are excluded from trip alerts');
   assert.equal(alerts.get('bom').length, 1, 'Ungeocoded BOM warnings are labelled and retained as statewide alerts');
   assert.equal(JSON.stringify(alerts.get('ses').map(alert => alert.id)), JSON.stringify(['near-ses:Emergency Warning']), 'Ungeocoded SES alerts are not guessed to be local');
   assert.match(alerts.get('fireDanger')[0].body, /Total fire ban/);
@@ -98,6 +103,16 @@ async function run() {
   assert.equal(JSON.stringify(alerts.get('hail').map(alert => alert.id)), JSON.stringify(['near-hail']));
   assert.match(alerts.get('wind')[0].body, /95 km\/h/);
   assert.match(alerts.get('rain')[0].body, /25\.0 mm\/h/);
+  const tfnsw = feeds.sources.find(source => source.id === 'tfnsw');
+  const priorFreshness = tfnsw.freshness;
+  const priorStatus = tfnsw.status;
+  tfnsw.freshness = staleFreshness;
+  tfnsw.status = 'stale';
+  const staleSourceResult = await collectHazardSnapshots(settings, null);
+  assert.equal(staleSourceResult.snapshots.some(item => item.id === 'watch:home:tfnsw'), false, 'A stale source does not create trip-alert snapshots');
+  assert.equal(staleSourceResult.errors.some(error => error.includes('not current')), true, 'A stale source is surfaced as an error');
+  tfnsw.freshness = priorFreshness;
+  tfnsw.status = priorStatus;
   const liveSettings = model.normalizeSettings({
     ...settings, watch: false, watches: [], activeWatchId: null,
     currentLocationAlerts: true, currentLocationRadiusKm: 10,

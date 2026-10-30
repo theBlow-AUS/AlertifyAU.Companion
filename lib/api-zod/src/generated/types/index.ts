@@ -27,5 +27,6 @@ export * from './weatherRadar';
 export * from './weatherRadarStatus';
 export * from './weatherSample';
 export * from './weatherSource';
+export * from './warningFreshness';
 export * from './weatherSourceId';
 export * from './weatherSourceStatus';

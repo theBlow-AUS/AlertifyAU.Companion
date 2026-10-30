@@ -28,7 +28,12 @@ export const GetCompanionWeatherResponse = zod.object({
   "error": zod.string().nullable(),
   "availablePoints": zod.int(),
   "requestedPoints": zod.int(),
-  "fetchedAt": zod.string()
+  "fetchedAt": zod.string(),
+  "freshness": zod.object({
+  "status": zod.enum(['current', 'stale', 'unavailable']),
+  "maxAgeMinutes": zod.int(),
+  "ageMinutes": zod.int().nullable()
+})
 })),
   "events": zod.array(zod.object({
   "id": zod.string(),
@@ -100,6 +105,11 @@ export const GetCompanionFeedsResponse = zod.object({
   "error": zod.string().nullable(),
   "fetchedAt": zod.string().nullable(),
   "updatedAt": zod.string().nullable(),
+  "freshness": zod.object({
+  "status": zod.enum(['current', 'stale', 'unavailable']),
+  "maxAgeMinutes": zod.int(),
+  "ageMinutes": zod.int().nullable()
+}),
   "districts": zod.array(zod.object({
   "name": zod.string(),
   "today": zod.string(),
@@ -116,6 +126,11 @@ export const GetCompanionFeedsResponse = zod.object({
   "error": zod.string().nullable(),
   "fetchedAt": zod.string().nullable(),
   "updatedAt": zod.string().nullable(),
+  "freshness": zod.object({
+  "status": zod.enum(['current', 'stale', 'unavailable']),
+  "maxAgeMinutes": zod.int(),
+  "ageMinutes": zod.int().nullable()
+}),
   "reports": zod.array(zod.object({
   "id": zod.string(),
   "title": zod.string(),
@@ -123,6 +138,11 @@ export const GetCompanionFeedsResponse = zod.object({
   "description": zod.string(),
   "location": zod.string(),
   "updatedAt": zod.string(),
+  "freshness": zod.object({
+  "status": zod.enum(['current', 'stale', 'unavailable']),
+  "maxAgeMinutes": zod.int(),
+  "ageMinutes": zod.int().nullable()
+}),
   "sourceUrl": zod.string(),
   "latitude": zod.number().nullable(),
   "longitude": zod.number().nullable(),

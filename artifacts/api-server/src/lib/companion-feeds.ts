@@ -1,4 +1,5 @@
 import type { CompanionFeeds, HazardReport, HazardSource, FireRatings } from '@workspace/api-zod';
+import { assessFreshness, warningFreshnessLimits } from './warning-freshness';
 
 type Json = Record<string, any>;
 const endpoint = 'https://alertify.au/';
@@ -31,6 +32,7 @@ function normalizeReports(id: string, raw: Json): HazardReport[] {
       id: `bom:${p.guid || p.link || i}`, title: clean(p.title), category: 'Weather warning',
       description: clean(p.description) || 'Alertify supplied the warning headline, but not its full bulletin text. Check the named warning area before acting.',
       location: 'NSW warning feed · location not geocoded', updatedAt: timestamp(p.pub_date),
+      freshness: assessFreshness(timestamp(p.pub_date), warningFreshnessLimits.bom),
       sourceUrl: safeUrl(p.link, 'https://www.bom.gov.au/nsw/warnings.shtml'),
       latitude: null, longitude: null, severity: /emergency/i.test(p.title) ? 3 : 2,
     }));
@@ -48,6 +50,10 @@ function normalizeReports(id: string, raw: Json): HazardReport[] {
       title: clean(p.headline || p.event || p.eventcodename || p.displayName || p.name || category) + (roads ? ` · ${roads}` : ''),
       category, location: location || 'Area not supplied / not geocoded', description: description || 'No additional details supplied.',
       updatedAt: timestamp(p.lastUpdated || p.sent || p.issued || p.updated || p.issue_date),
+      freshness: assessFreshness(
+        timestamp(p.lastUpdated || p.sent || p.issued || p.updated || p.issue_date),
+        id === 'tfnsw' ? warningFreshnessLimits.tfnsw : warningFreshnessLimits.ses,
+      ),
       sourceUrl: safeUrl(p.web || p.url || p.link, id === 'tfnsw' ? 'https://www.livetraffic.com/' : 'https://www.ses.nsw.gov.au/'),
       latitude: point && Number.isFinite(point[1]) ? point[1] : null,
       longitude: point && Number.isFinite(point[0]) ? point[0] : null,
@@ -62,10 +68,13 @@ async function fireRatings(): Promise<FireRatings> {
     const raw = await download('fire-weather-data.php');
     if (!Array.isArray(raw.districts) || !raw.districts.length) throw new Error('Fire weather districts are missing from Alertify.');
     const updatedAt = timestamp(raw.generated_utc) || null;
-    const stale = !!updatedAt && Date.now() - Date.parse(updatedAt) > 60 * 60000;
+    const freshness = assessFreshness(updatedAt, warningFreshnessLimits.fireDanger);
+    const stale = freshness.status === 'stale';
     lastFire = {
-      status: stale ? 'stale' : 'live', error: stale ? 'Alertify fire rating data is over one hour old.' : null,
-      fetchedAt: new Date().toISOString(), updatedAt,
+      status: freshness.status === 'current' ? 'live' : freshness.status,
+      error: freshness.status === 'current' ? null : freshness.status === 'stale'
+        ? 'Alertify fire rating data is over 24 hours old.' : 'Alertify fire rating timestamp is missing or invalid.',
+      fetchedAt: new Date().toISOString(), updatedAt, freshness,
       districts: raw.districts.map((d: Json) => ({
         name: clean(d.name), today: clean(d.today) || 'Not supplied', tomorrow: clean(d.tomorrow) || 'Not supplied',
         totalFireBan: typeof d.total_fire_ban === 'boolean' ? d.total_fire_ban : null,
@@ -74,7 +83,15 @@ async function fireRatings(): Promise<FireRatings> {
     };
     return lastFire;
   } catch (e) {
-    return { status: lastFire ? 'stale' : 'unavailable', error: e instanceof Error ? e.message : 'Fire ratings unavailable.', fetchedAt: lastFire?.fetchedAt ?? null, updatedAt: lastFire?.updatedAt ?? null, districts: lastFire?.districts ?? [] };
+    const freshness = lastFire
+      ? { ...assessFreshness(lastFire.updatedAt, warningFreshnessLimits.fireDanger), status: 'stale' as const }
+      : assessFreshness(null, warningFreshnessLimits.fireDanger);
+    return {
+      status: lastFire ? 'stale' : 'unavailable',
+      error: e instanceof Error ? e.message : 'Fire ratings unavailable.',
+      fetchedAt: lastFire?.fetchedAt ?? null, updatedAt: lastFire?.updatedAt ?? null,
+      freshness, districts: lastFire?.districts ?? [],
+    };
   }
 }
 async function source(def: typeof definitions[number]): Promise<HazardSource> {
@@ -83,22 +100,35 @@ async function source(def: typeof definitions[number]): Promise<HazardSource> {
     const reports = normalizeReports(def.id, raw);
     const partial = Object.values(raw.feedStatus || {}).some((s: any) => s.ok === false);
     const updatedAt = timestamp(raw._alertify_generated_utc || raw.lastPublished) || null;
-    const stale = raw._alertify_stale === true || (!!updatedAt && Date.now() - Date.parse(updatedAt) > 30 * 60000);
+    const freshness = assessFreshness(updatedAt, idFreshnessLimit(def.id));
+    if (raw._alertify_stale === true && freshness.status === 'current') freshness.status = 'stale';
+    const stale = freshness.status === 'stale';
     const result: HazardSource = {
-      id: def.id, name: def.name, status: stale ? 'stale' : partial ? 'partial' : 'live',
-      error: stale ? 'Alertify reports stale data or the feed is over 30 minutes old.' : partial ? 'Some TfNSW source layers could not be refreshed.' : null,
-      fetchedAt: new Date().toISOString(), updatedAt, reports,
+      id: def.id, name: def.name,
+      status: freshness.status === 'unavailable' ? 'unavailable' : stale ? 'stale' : partial ? 'partial' : 'live',
+      error: freshness.status === 'unavailable' ? 'Alertify warning feed timestamp is missing or invalid.'
+        : stale ? `Alertify warning feed is over ${freshness.maxAgeMinutes} minutes old.`
+        : partial ? 'Some TfNSW source layers could not be refreshed.' : null,
+      fetchedAt: new Date().toISOString(), updatedAt, freshness, reports,
     };
     lastSources.set(def.id, result);
     return result;
   } catch (e) {
     const old = lastSources.get(def.id);
+    const freshness = old
+      ? { ...assessFreshness(old.updatedAt, idFreshnessLimit(def.id)), status: 'stale' as const }
+      : assessFreshness(null, idFreshnessLimit(def.id));
     return {
       id: def.id, name: def.name, status: old ? 'stale' : 'unavailable',
       error: e instanceof Error ? e.message : 'Source unavailable.',
-      fetchedAt: old?.fetchedAt ?? null, updatedAt: old?.updatedAt ?? null, reports: old?.reports ?? [],
+      fetchedAt: old?.fetchedAt ?? null, updatedAt: old?.updatedAt ?? null,
+      freshness,
+      reports: old?.reports ?? [],
     };
   }
+}
+function idFreshnessLimit(id: typeof definitions[number]['id']) {
+  return id === 'tfnsw' ? warningFreshnessLimits.tfnsw : id === 'bom' ? warningFreshnessLimits.bom : warningFreshnessLimits.ses;
 }
 let cached: { at: number; data: CompanionFeeds } | null = null;
 let pending: Promise<CompanionFeeds> | null = null;

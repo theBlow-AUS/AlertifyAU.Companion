@@ -17,4 +17,5 @@ export interface WeatherSource {
   availablePoints: number;
   requestedPoints: number;
   fetchedAt: string;
+  freshness: import('./warningFreshness').WarningFreshness;
 }

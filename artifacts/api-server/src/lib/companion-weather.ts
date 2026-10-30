@@ -1,5 +1,6 @@
 import type { CompanionWeather, WeatherSource, WeatherRadar } from '@workspace/api-zod';
 import { type Json, type Point, iso, makeSample, stormEvents } from './weather-normalize';
+import { assessFreshness, warningFreshnessLimits } from './warning-freshness';
 
 const cache = new Map<string, { expires: number; promise: Promise<Json> }>();
 let active = 0;
@@ -80,13 +81,15 @@ export async function getWeather(points: Point[]): Promise<CompanionWeather> {
   const samples = points.map((p, i) => makeSample(p, grid.data, rain[i].data));
   const winds: Result[] = samples.map(s => ({ data: s.windSpeedKph !== null || s.windGustKph !== null ? { fetched_at: s.windTime } : null, error: grid.error || 'No wind observation returned for this sample.' }));
   const rains: Result[] = samples.map((s, i) => ({ data: s.rainPeakMmH !== null ? { fetched_at: rain[i].data?.fetched_at } : null, error: rain[i].error || 'No rain nowcast returned for this sample.' }));
-  sources.push(source('wind', 'Xweather Wind', winds, 30), source('rain', 'Xweather Rain', rains, 15));
+  sources.push(source('wind', 'Xweather Wind', winds, warningFreshnessLimits.wind), source('rain', 'Xweather Rain', rains, warningFreshnessLimits.rain));
   return { fetchedAt: new Date().toISOString(), sources, samples, events: [...new Map(events.map(e => [e.id, e])).values()], radar: radarData };
 }
 function source(id: WeatherSource['id'], name: string, results: Result[], maxAgeMinutes = 15): WeatherSource {
   const good = results.filter(r => r.data);
-  const stale = good.some(r => !iso(r.data?.fetched_at) || Date.now() - Date.parse(iso(r.data?.fetched_at)) > maxAgeMinutes * 60000 || Date.parse(iso(r.data?.fetched_at)) - Date.now() > 5 * 60000);
-  return { id, name, status: !good.length ? 'unavailable' : good.length < results.length ? 'partial' : stale ? 'stale' : 'live',
+  const fetchedAt = good.map(r => iso(r.data?.fetched_at)).sort()[0] || '';
+  const freshness = good.length ? assessFreshness(fetchedAt, maxAgeMinutes) : assessFreshness(null, maxAgeMinutes);
+  const stale = freshness.status !== 'current';
+  return { id, name, status: !good.length || freshness.status === 'unavailable' ? 'unavailable' : stale ? 'stale' : good.length < results.length ? 'partial' : 'live',
     error: good.length < results.length ? [...new Set(results.filter(r => !r.data).map(r => r.error))].join(' ') : stale ? 'Source timestamps are missing or outside the freshness window.' : null,
-    availablePoints: good.length, requestedPoints: results.length, fetchedAt: good.map(r => iso(r.data?.fetched_at)).sort()[0] || '' };
+    availablePoints: good.length, requestedPoints: results.length, fetchedAt, freshness };
 }

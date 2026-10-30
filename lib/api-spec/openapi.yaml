@@ -90,7 +90,7 @@ components:
         fetchedAt: { type: string }
     WeatherSource:
       type: object
-      required: [id, name, status, error, availablePoints, requestedPoints, fetchedAt]
+      required: [id, name, status, error, availablePoints, requestedPoints, fetchedAt, freshness]
       properties:
         id: { type: string, enum: [lightning, hail, wind, rain] }
         name: { type: string }
@@ -99,6 +99,7 @@ components:
         availablePoints: { type: integer }
         requestedPoints: { type: integer }
         fetchedAt: { type: string }
+        freshness: { $ref: "#/components/schemas/WarningFreshness" }
     WeatherEvent:
       type: object
       required: [id, kind, latitude, longitude, polygon, description, validFrom, validTo]
@@ -178,7 +179,7 @@ components:
           items: { type: string }
     HazardReport:
       type: object
-      required: [id, title, category, description, location, updatedAt, sourceUrl, latitude, longitude, severity]
+      required: [id, title, category, description, location, updatedAt, freshness, sourceUrl, latitude, longitude, severity]
       properties:
         id: { type: string }
         title: { type: string }
@@ -186,13 +187,14 @@ components:
         description: { type: string }
         location: { type: string }
         updatedAt: { type: string }
+        freshness: { $ref: "#/components/schemas/WarningFreshness" }
         sourceUrl: { type: string }
         latitude: { type: ["number", "null"] }
         longitude: { type: ["number", "null"] }
         severity: { type: integer }
     HazardSource:
       type: object
-      required: [id, name, status, error, fetchedAt, updatedAt, reports]
+      required: [id, name, status, error, fetchedAt, updatedAt, freshness, reports]
       properties:
         id: { type: string, enum: [tfnsw, bom, ses] }
         name: { type: string }
@@ -200,20 +202,29 @@ components:
         error: { type: ["string", "null"] }
         fetchedAt: { type: ["string", "null"] }
         updatedAt: { type: ["string", "null"] }
+        freshness: { $ref: "#/components/schemas/WarningFreshness" }
         reports:
           type: array
           items: { $ref: "#/components/schemas/HazardReport" }
     FireRatings:
       type: object
-      required: [status, error, fetchedAt, updatedAt, districts]
+      required: [status, error, fetchedAt, updatedAt, freshness, districts]
       properties:
         status: { type: string, enum: [live, stale, unavailable] }
         error: { type: ["string", "null"] }
         fetchedAt: { type: ["string", "null"] }
         updatedAt: { type: ["string", "null"] }
+        freshness: { $ref: "#/components/schemas/WarningFreshness" }
         districts:
           type: array
           items: { $ref: "#/components/schemas/FireDistrict" }
+    WarningFreshness:
+      type: object
+      required: [status, maxAgeMinutes, ageMinutes]
+      properties:
+        status: { type: string, enum: [current, stale, unavailable] }
+        maxAgeMinutes: { type: integer }
+        ageMinutes: { type: ["integer", "null"] }
     CompanionFeeds:
       type: object
       required: [fireRatings, sources]

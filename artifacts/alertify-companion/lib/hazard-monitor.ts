@@ -81,7 +81,7 @@ export async function collectHazardSnapshots(settings: Settings, trip: Trip | nu
     if (!settings.alertHazards.fireDanger) {
       snapshots.push(...scopes.map(scope => hazardSnapshot(scope, 'fireDanger', [], false)));
     } else {
-      if (feeds.fireRatings.status !== 'live') errors.push(feeds.fireRatings.error || 'Fire danger ratings are not current.');
+      if (feeds.fireRatings.status !== 'live' || feeds.fireRatings.freshness?.status !== 'current') errors.push(feeds.fireRatings.error || 'Fire danger ratings are not current.');
       else {
         const matches = await Promise.all(scopes.map(async scope => {
           const results = await Promise.all(scope.points.map(point => getCompanionFireDistrict({ latitude: point.latitude, longitude: point.longitude }).catch(() => null)));
@@ -111,12 +111,12 @@ export async function collectHazardSnapshots(settings: Settings, trip: Trip | nu
         continue;
       }
       const source = feeds.sources.find(item => item.id === sourceId);
-      if (!source || !['live', 'partial'].includes(source.status)) {
+      if (!source || !['live', 'partial'].includes(source.status) || source.freshness?.status !== 'current') {
         errors.push(source?.error || `${source?.name ?? sourceId} is not current.`);
         continue;
       }
       for (const scope of scopes) {
-        const alerts = source.reports.filter(report => {
+        const alerts = source.reports.filter(report => report.freshness?.status === 'current').filter(report => {
           if (!reportMatches(scope, report, sourceId)) return false;
           return sourceId === 'tfnsw' || report.severity >= minimumSeverity(scope.level);
         }).map(report => ({
@@ -157,7 +157,7 @@ export async function collectHazardSnapshots(settings: Settings, trip: Trip | nu
       } catch { errors.push('Xweather sources could not be checked.'); }
     }
     const sourceHealthy = (id: string) => weatherResults.some(result => result.sources.some(source =>
-      source.id === id && ['live', 'partial'].includes(source.status) && source.availablePoints > 0));
+      source.id === id && ['live', 'partial'].includes(source.status) && source.freshness?.status === 'current' && source.availablePoints > 0));
     const newest = weatherResults.reduce((latest, result) => Math.max(latest, Date.parse(result.fetchedAt)), 0);
     const weatherFresh = newest > 0 && Date.now() - newest < 10 * 60000;
     for (const option of selectedWeather) {
@@ -186,7 +186,9 @@ export async function collectHazardSnapshots(settings: Settings, trip: Trip | nu
             const inScope = scope.path ? routeDistance(samplePoint, scope.path) <= scope.radius : !!scope.place && distance(scope.place, samplePoint) <= scope.radius;
             if (!inScope) continue;
             const observedAt = option.key === 'wind' ? sample.windTime : sample.rainTime;
-            if (!observedAt || Date.now() - Date.parse(observedAt) > 30 * 60000) continue;
+            const observedAge = observedAt ? Date.now() - Date.parse(observedAt) : Infinity;
+            const maxAgeMinutes = option.key === 'wind' ? 30 : 15;
+            if (!Number.isFinite(observedAge) || observedAge > maxAgeMinutes * 60000) continue;
             const value = option.key === 'wind' ? sample.windGustKph : sample.rainPeakMmH;
             if (value === null || value === undefined || value < threshold) continue;
             if (option.key === 'rain' && sample.rainEnd && Date.parse(sample.rainEnd) < Date.now()) continue;

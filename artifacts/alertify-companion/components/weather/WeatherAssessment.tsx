@@ -36,7 +36,7 @@ export function WeatherAssessment({ watch, route, detailed = false }: { watch?: 
     {weather.isPending && <><ActivityIndicator color={c.primary} /><Text style={ui.small}>Checking Alertify’s Xweather sources and RainViewer…</Text></>}
     {(weather.isError || old) && <Notice error>Weather could not be verified as current. Retained data, if shown, must not be treated as a current assessment.</Notice>}
     {data?.sources.map(s => <View key={s.id} style={ui.card}>
-      <View style={ui.spread}><Text style={[ui.h2, { flex: 1 }]}>{s.name}</Text><Text style={[ui.label, { color: old || s.status !== 'live' ? c.warning : c.success }]}>{old ? 'STALE' : s.status.toUpperCase()}</Text></View>
+       <View style={ui.spread}><Text style={[ui.h2, { flex: 1 }]}>{s.name}</Text><Text style={[ui.label, { color: old || s.freshness?.status !== 'current' ? c.warning : c.success }]}>{old ? 'STALE' : (s.freshness?.status ?? 'unavailable').toUpperCase()}{s.status === 'partial' ? ' · PARTIAL' : ''}</Text></View>
       <Text style={ui.text}>{s.status === 'unavailable' ? 'Source unavailable—not an all-clear.' : s.id === 'lightning' ? `${events.filter(e => e.kind === 'lightning').length} returned strikes within ${radius} km · last 60 minutes` : s.id === 'hail' ? `${events.filter(e => e.kind === 'hail').length} forecast areas/periods intersect this ${route ? 'corridor' : 'zone'}` : s.id === 'wind' ? `Highest returned gust: ${display(wind, 'km/h')}` : `Highest returned rain rate: ${display(rain, 'mm/h')}`}</Text>
       {(s.status !== 'live' || s.error) && <Text style={[ui.small, { color: c.warning }]}>{s.error} Returned for {s.availablePoints}/{s.requestedPoints} query points.</Text>}
       <Text style={ui.small}>Source time: {time(s.fetchedAt)}</Text>

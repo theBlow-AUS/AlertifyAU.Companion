@@ -13,6 +13,7 @@ export interface HazardReport {
   description: string;
   location: string;
   updatedAt: string;
+  freshness: import('./warningFreshness').WarningFreshness;
   sourceUrl: string;
   /** @nullable */
   latitude: number | null;

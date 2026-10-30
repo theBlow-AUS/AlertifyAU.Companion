@@ -56,6 +56,7 @@ export interface WeatherSource {
   availablePoints: number;
   requestedPoints: number;
   fetchedAt: string;
+  freshness: WarningFreshness;
 }
 
 export type WeatherEventKind = typeof WeatherEventKind[keyof typeof WeatherEventKind];
@@ -146,6 +147,7 @@ export interface HazardReport {
   description: string;
   location: string;
   updatedAt: string;
+  freshness: WarningFreshness;
   sourceUrl: string;
   /** @nullable */
   latitude: number | null;
@@ -173,6 +175,21 @@ export const HazardSourceStatus = {
   unavailable: 'unavailable',
 } as const;
 
+export type WarningFreshnessStatus = typeof WarningFreshnessStatus[keyof typeof WarningFreshnessStatus];
+
+export const WarningFreshnessStatus = {
+  current: 'current',
+  stale: 'stale',
+  unavailable: 'unavailable',
+} as const;
+
+export interface WarningFreshness {
+  status: WarningFreshnessStatus;
+  maxAgeMinutes: number;
+  /** @nullable */
+  ageMinutes: number | null;
+}
+
 export interface HazardSource {
   id: HazardSourceId;
   name: string;
@@ -183,6 +200,7 @@ export interface HazardSource {
   fetchedAt: string | null;
   /** @nullable */
   updatedAt: string | null;
+  freshness: WarningFreshness;
   reports: HazardReport[];
 }
 
@@ -203,6 +221,7 @@ export interface FireRatings {
   fetchedAt: string | null;
   /** @nullable */
   updatedAt: string | null;
+  freshness: WarningFreshness;
   districts: FireDistrict[];
 }
 

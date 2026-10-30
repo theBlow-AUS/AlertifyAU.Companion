@@ -8,6 +8,7 @@
 import type { HazardReport } from './hazardReport';
 import type { HazardSourceId } from './hazardSourceId';
 import type { HazardSourceStatus } from './hazardSourceStatus';
+import type { WarningFreshness } from './warningFreshness';
 
 export interface HazardSource {
   id: HazardSourceId;
@@ -19,5 +20,6 @@ export interface HazardSource {
   fetchedAt: string | null;
   /** @nullable */
   updatedAt: string | null;
+  freshness: WarningFreshness;
   reports: HazardReport[];
 }

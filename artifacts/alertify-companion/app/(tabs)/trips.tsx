@@ -13,7 +13,7 @@ import { WeatherAssessment } from '@/components/weather/WeatherAssessment';
 
 export default function Trips() {
   const c = useColors();
-  const { settings, saveSettings, feed, trip, saveTrip, isStale } = useCompanion();
+  const { settings, saveSettings, feed, feeds, trip, saveTrip, isStale } = useCompanion();
   const [start, setStart] = useState<Place | null>(settings.home);
   const [destination, setDestination] = useState<Place | null>(null);
   const [search, setSearch] = useState('');
@@ -27,6 +27,8 @@ export default function Trips() {
   const [error, setError] = useState('');
   const shownRoute = estimate ?? (destination ? null : trip);
   const nearby = shownRoute ? (feed.data?.incidents ?? []).filter(i => routeDistance(i, shownRoute.coordinates) <= 5).sort((a, b) => b.severity - a.severity) : [];
+  const rfsFreshness = !feed.data || feed.isError ? 'unavailable' : isStale ? 'stale' : 'current';
+  const freshnessLabel = (status?: string) => status === 'current' ? 'CURRENT' : status === 'stale' ? 'STALE' : 'UNAVAILABLE';
   async function find() {
     if (search.trim().length < 3) { setError('Enter at least three characters, including a suburb or postcode.'); return; }
     setBusy('search'); setError('');
@@ -126,7 +128,23 @@ export default function Trips() {
       <View style={ui.spread}><Text style={ui.h2}>{Math.round(shownRoute.distance)} km estimated</Text><Text style={ui.small}>{Math.round(shownRoute.duration)} min · no live traffic</Text></View>
       <Notice>Estimate from the public OSRM routing service, based on OpenStreetMap. Google Maps or Waze may choose a different route. Alertify does not receive their live routes or traffic reports.</Notice>
       <View style={ui.spread}><Text style={ui.h2}>Along this route estimate</Text><Text style={ui.small}>5 km corridor</Text></View>
-      {isStale ? <Notice error>Incident data is unavailable or stale. No current RFS assessment can be made.</Notice> : <View style={[ui.card, { paddingVertical: nearby.length ? 0 : 16 }]}>{nearby.length ? nearby.map(i => <IncidentRow key={i.id} incident={i} subtitle={`${i.category} · ${routeDistance(i, shownRoute.coordinates).toFixed(1)} km from estimated route`} />) : <><Text style={ui.h2}>No RFS reports in this corridor</Text><Text style={ui.small}>This is not a safety assessment. Review the separate sampled-weather checks below; road closures, flood areas and live traffic are not fully assessed.</Text></>}</View>}
+       {rfsFreshness !== 'current' ? <Notice error>RFS incident data is {rfsFreshness}. No current RFS assessment can be made.</Notice> : <View style={[ui.card, { paddingVertical: nearby.length ? 0 : 16 }]}>{nearby.length ? nearby.map(i => <IncidentRow key={i.id} incident={i} subtitle={`${i.category} · ${routeDistance(i, shownRoute.coordinates).toFixed(1)} km from estimated route`} />) : <><Text style={ui.h2}>No RFS reports in this corridor</Text><Text style={ui.small}>This is not a safety assessment. Review the separate sampled-weather checks below; road closures, flood areas and live traffic are not fully assessed.</Text></>}</View>}
+       <View style={ui.card} testID="trip-warning-freshness">
+         <Text style={ui.h2}>Warning data freshness</Text>
+         <Text style={ui.small}>Stale and unavailable sources are not treated as an all-clear. Only current records qualify for on-device trip alerts.</Text>
+         <View style={ui.spread}><Text style={ui.text}>NSW RFS incidents</Text><Text style={ui.label}>{rfsFreshness.toUpperCase()}</Text></View>
+         <View style={ui.spread}><Text style={ui.text}>Fire danger ratings</Text><Text style={ui.label}>{freshnessLabel(feeds.data?.fireRatings.freshness?.status ?? (feeds.isError ? 'unavailable' : undefined))}</Text></View>
+         {feeds.data?.sources.map(source => {
+           const sourceCurrent = source.freshness?.status === 'current' && ['live', 'partial'].includes(source.status);
+           const freshReports = sourceCurrent ? source.reports.filter(report => report.freshness?.status === 'current').length : 0;
+           const staleReports = source.reports.filter(report => report.freshness?.status === 'stale').length;
+           return <View key={source.id} style={{ gap: 3 }}>
+             <View style={ui.spread}><Text style={ui.text}>{source.name}</Text><Text style={ui.label}>{freshnessLabel(source.freshness?.status)}</Text></View>
+             <Text style={ui.small}>{source.id === 'bom' && sourceCurrent ? `${freshReports} current statewide warnings · not geocoded` : sourceCurrent ? `${freshReports} current records · ${staleReports} stale excluded` : 'No current source assessment; retained records are not used.'}</Text>
+           </View>;
+         })}
+         {!feeds.data && <Text style={ui.small}>{feeds.isError ? 'TfNSW, BOM, SES and fire-danger data are unavailable.' : 'Checking TfNSW, BOM, SES and fire-danger data…'}</Text>}
+       </View>
       <Text style={ui.small}>Route calculated {timeAgo(shownRoute.calculatedAt)}. Proximity is measured to reported incident points, not fire perimeters.</Text>
       <WeatherAssessment route={shownRoute} />
     </View>}

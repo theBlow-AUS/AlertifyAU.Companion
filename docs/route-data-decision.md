@@ -23,6 +23,24 @@ Keep the information sources distinct:
 
 Recheck Alertify's own warning data at preview time. If route geometry or warning data is unavailable or stale, say so instead of presenting an unqualified risk score.
 
+### Alertify warning freshness policy
+
+Route-provider traffic age and Alertify warning age are separate checks. The trip assessment uses the warning source's own timestamp; it does not infer fresh Alertify data from a newly calculated route. A timestamp exactly at the limit is current. Older data is stale and excluded from risk matches and on-device trip alerts. Missing, invalid, or more than five minutes future-dated timestamps are unavailable. The API returns `freshness.status`, `ageMinutes`, and `maxAgeMinutes` for feed sources and warning records, using `current`, `stale`, or `unavailable`.
+
+| Alertify source/type | Maximum age | Timestamp used | Trip treatment |
+| --- | ---: | --- | --- |
+| NSW RFS incidents | 5 minutes | Successful RFS feed fetch time | Current feed can be assessed; stale/unavailable feed cannot establish an all-clear. Individual incident update text is descriptive and is not used as feed freshness. |
+| TfNSW Live Hazards | 30 minutes | Feed generation time for source health; each record's last-updated/issued time for matching | Stale records are excluded; unavailable source data is not assessed. |
+| BOM NSW warnings | 12 hours | Warning publication time; source generation time for feed health | Current warnings remain statewide notices, not route-near matches. Older or undated warnings are excluded from risk matching. |
+| NSW SES HazardWatch | 2 hours | Each record's last-updated/issued time; source generation time for feed health | Stale or undated records are excluded from risk matching. |
+| Fire-danger ratings | 24 hours | Alertify feed generation time | Stale/unavailable district ratings are not used to qualify a route. |
+| Xweather lightning | 60 minutes per strike; 15 minutes for a source snapshot | Strike `validFrom`; source response observation time | Strikes older than 60 minutes are excluded; stale/unavailable source data is reported separately. |
+| Xweather hail threats | Active `validFrom`–`validTo` interval; 15 minutes for a source snapshot | Forecast validity interval and source response observation time | Expired forecast periods and stale/unavailable source data are excluded. |
+| Xweather wind | 30 minutes | Wind observation time | Older observations are excluded. |
+| Xweather rain | 15 minutes | Rain nowcast observation time | Older observations or expired nowcast windows are excluded. |
+
+The freshness limits are product limits, not guarantees that an upstream agency has refreshed its data within that period. `current` means the timestamp is within the stated limit; it does not mean the feed is complete, the route is safe, or the warning covers a specific location. Partial feeds remain identified as partial. A failed refresh is reported as stale when retained data exists and unavailable otherwise.
+
 ## Provider comparison
 
 Prices below are public list-price signals checked on the decision date, not quotes. They are in each provider's published currency and can change by region, account, request fields, and volume.
