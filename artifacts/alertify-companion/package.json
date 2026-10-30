@@ -11,6 +11,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test:watch-model": "node scripts/check-watch-model.cjs",
     "test:weather": "node scripts/check-weather.cjs",
+    "test:route-coverage": "node scripts/check-route-coverage.cjs",
+    "test:route-coverage:mapbox": "node scripts/check-route-coverage.cjs --mapbox",
     "test:fire-district": "node scripts/check-fire-district.cjs",
     "test:alerts": "node scripts/check-alert-matching.cjs && node scripts/check-location-runtime.cjs",
     "test:updates": "node scripts/check-unified-updates.cjs"

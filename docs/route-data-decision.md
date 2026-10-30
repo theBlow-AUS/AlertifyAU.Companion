@@ -53,6 +53,37 @@ Therefore:
 - Do not imply Waze traffic access, equivalence with Waze's chosen route, complete hazard coverage, or a safety guarantee.
 - Refresh the risk check when the user changes the planned trip or explicitly asks for an updated preview.
 
+## Route coverage verification
+
+**Checked:** 30 October 2026
+**Profile tested:** Mapbox Directions API v5, `mapbox/driving-traffic`
+**Result:** All 24 representative requests returned route geometry. The checks exercise route availability and Alertify's route-proximity matching; they do not establish uniform live-traffic observations on every road.
+
+| Jurisdiction | Metro example | Regional example | Remote example |
+| --- | --- | --- | --- |
+| NSW | Sydney–Parramatta · 25.9 km | Orange–Dubbo · 150.4 km | Broken Hill–Silverton · 25.4 km |
+| VIC | Melbourne–Geelong · 73.9 km | Bendigo–Ballarat · 119.1 km | Mildura–Ouyen · 103.5 km |
+| QLD | Brisbane–Ipswich · 39.8 km | Townsville–Charters Towers · 136.6 km | Cloncurry–Mount Isa · 121.1 km |
+| SA | Adelaide–Gawler · 51.9 km | Port Augusta–Whyalla · 76.1 km | Coober Pedy–Glendambo · 255.0 km |
+| WA | Perth–Mandurah · 72.4 km | Geraldton–Dongara · 65.1 km | Broome–Derby · 223.2 km |
+| TAS | Hobart–Glenorchy · 10.6 km | Launceston–Devonport · 102.1 km | Queenstown–Strahan · 41.1 km |
+| NT | Darwin–Palmerston · 21.7 km | Katherine–Mataranka · 105.8 km | Alice Springs–Tennant Creek · 508.2 km |
+| ACT | Canberra–Gungahlin · 20.7 km | Canberra–Yass · 66.1 km | Canberra–Cooma · 117.2 km |
+
+The ACT examples include a Canberra-to-Yass regional trip and a Canberra-to-Cooma low-density corridor proxy; the latter is outside the ACT because this set has no remote-area road pair within the Territory. Distances are the Mapbox response values for the checked origin/destination pairs, not surveyed road distances.
+
+The route checks also ran controlled report-reference cases through Alertify's `collectHazardSnapshots` trip matcher for every returned geometry. A synthetic mapped report 1.8 km from the route was included, and a second point was placed at least 6 km away; the first matched the 5 km corridor and the second did not in all 24 cases. These are geometry/matching regression references, **not actual or independently reviewed hazard reports**. No real-world false-positive/false-negative rate was measured.
+
+### Limits found
+
+- This validation is a direct Mapbox API request; the companion's current Trip Watch screen still obtains its estimate from public OSRM/OpenStreetMap. The selected Mapbox profile has not yet been integrated into the shipped route flow.
+- Route resolution does not prove that live traffic observations exist for every segment. Mapbox may use typical traffic when live speeds are unavailable, especially away from major roads. This check did not compare observed speeds or ETA accuracy.
+- Alertify's non-weather warning feeds are region-limited: the RFS incident feed, TfNSW, NSW BOM warnings, NSW SES HazardWatch, and fire-danger district mapping are NSW-specific. BOM records without mapped locations are treated as statewide NSW notices, not as verified route-near warnings. A returned Mapbox route outside NSW therefore does not mean Alertify has matching official warnings there.
+- Weather checks use at most five distance-spaced query points for a route. Wind and rain are point samples, not continuous corridor coverage; lightning and hail matching is subject to upstream query radii and source coverage. Long and remote trips can have meaningful gaps.
+- The route geometry and warning list are previews. Google Maps and Waze independently recalculate after handoff and can take different roads. No parity, completeness, or safety guarantee is implied.
+
+Re-run the live checks with `pnpm --filter @workspace/alertify-companion run test:route-coverage:mapbox`. The script requires the `MAPBOX_ACCESS_TOKEN` Replit Secret, does not print or persist its value, and tests the selected Mapbox profile. `test:route-coverage` separately checks the current OSRM endpoint used by the app.
+
 ## Source links
 
 - [Mapbox Directions API](https://docs.mapbox.com/api/navigation/directions/)
