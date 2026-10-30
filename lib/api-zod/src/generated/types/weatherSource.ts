@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { WarningFreshness } from './warningFreshness';
 import type { WeatherSourceId } from './weatherSourceId';
 import type { WeatherSourceStatus } from './weatherSourceStatus';
 
@@ -17,5 +18,5 @@ export interface WeatherSource {
   availablePoints: number;
   requestedPoints: number;
   fetchedAt: string;
-  freshness: import('./warningFreshness').WarningFreshness;
+  freshness: WarningFreshness;
 }

@@ -1,7 +1,8 @@
-import { getCompanionFeeds, getCompanionFireDistrict, getCompanionWeather } from '@workspace/api-client-react';
+import { getCompanionFeeds, getCompanionWeather } from '@workspace/api-client-react';
 import { alertHazardOptions, distance, isCurrentTrip, routeDistance, type AlertHazardKey, type Place, type Settings, type Trip } from './model';
 import { eventInScope, routeSamples } from './weather-geometry';
 import type { HazardNotice, HazardScopeSnapshot } from './monitor-state';
+import { checkWarningCoverage, coverageMessage, nswWarningSources, summarizeCoverage } from './warning-coverage';
 
 type Point = Pick<Place, 'latitude' | 'longitude'>;
 type Scope = {
@@ -71,6 +72,14 @@ export async function collectHazardSnapshots(settings: Settings, trip: Trip | nu
   }
   if (!scopes.length) return { snapshots, errors };
 
+  // Establish geography independently of feed health. Unlocated NSW warnings
+  // must not become nationwide alerts, nor may unsupported areas clear history.
+  const scopeCoverage = new Map(await Promise.all(scopes.map(async scope => {
+    const points = await checkWarningCoverage(scope.points);
+    const summary = summarizeCoverage(points);
+    if (summary.status !== 'nsw') errors.push(`${scope.label}: ${coverageMessage(points)} Sources: ${nswWarningSources}.`);
+    return [scope.id, { points, summary }] as const;
+  })));
   const needsFeeds = settings.alertHazards.fireDanger || reportSources.some(key => settings.alertHazards[key]);
   let feeds: Awaited<ReturnType<typeof getCompanionFeeds>> | null = null;
   if (needsFeeds) {
@@ -84,7 +93,9 @@ export async function collectHazardSnapshots(settings: Settings, trip: Trip | nu
       if (feeds.fireRatings.status !== 'live' || feeds.fireRatings.freshness?.status !== 'current') errors.push(feeds.fireRatings.error || 'Fire danger ratings are not current.');
       else {
         const matches = await Promise.all(scopes.map(async scope => {
-          const results = await Promise.all(scope.points.map(point => getCompanionFireDistrict({ latitude: point.latitude, longitude: point.longitude }).catch(() => null)));
+          const coverage = scopeCoverage.get(scope.id)!;
+          if (!coverage.summary.nsw) return null;
+          const results = coverage.points.filter(point => point.area === 'nsw').map(point => point.district);
           if (results.some(result => !result || !['matched', 'outside_nsw'].includes(result.status))) {
             errors.push(`${scope.label}: a current fire-danger district could not be confirmed.`);
             return null;
@@ -100,7 +111,8 @@ export async function collectHazardSnapshots(settings: Settings, trip: Trip | nu
               body: `${district.today}${district.totalFireBan ? ' · Total fire ban today' : ''}`,
             }];
           });
-          return hazardSnapshot(scope, 'fireDanger', alerts, true);
+          // Do not confirm a disappearance while any checked area is unsupported.
+          return alerts.length || coverage.summary.status === 'nsw' ? hazardSnapshot(scope, 'fireDanger', alerts, true) : null;
         }));
         snapshots.push(...matches.filter((match): match is HazardScopeSnapshot => match !== null));
       }
@@ -115,7 +127,10 @@ export async function collectHazardSnapshots(settings: Settings, trip: Trip | nu
         errors.push(source?.error || `${source?.name ?? sourceId} is not current.`);
         continue;
       }
+      if (source.status === 'partial') errors.push(source.error || `${source.name} has incomplete source layers.`);
       for (const scope of scopes) {
+        const coverage = scopeCoverage.get(scope.id)!;
+        if (!coverage.summary.nsw) continue;
         const alerts = source.reports.filter(report => report.freshness?.status === 'current').filter(report => {
           if (!reportMatches(scope, report, sourceId)) return false;
           return sourceId === 'tfnsw' || report.severity >= minimumSeverity(scope.level);
@@ -127,7 +142,9 @@ export async function collectHazardSnapshots(settings: Settings, trip: Trip | nu
             ? `NSW-wide warning · its area is not geocoded by Alertify. ${report.category}`
             : `${report.category} · ${report.location}`,
         }));
-        snapshots.push(hazardSnapshot(scope, sourceId, alerts, true));
+        if (alerts.length || (coverage.summary.status === 'nsw' && source.status === 'live')) {
+          snapshots.push(hazardSnapshot(scope, sourceId, alerts, true));
+        }
       }
     }
   } else {

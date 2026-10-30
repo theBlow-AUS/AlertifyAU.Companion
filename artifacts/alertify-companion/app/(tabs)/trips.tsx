@@ -10,6 +10,10 @@ import { estimateRoute, searchPlaces } from '@/lib/services';
 import { openNavigation } from '@/lib/navigation';
 import { type NavigationApp, type Place, type RouteEstimate, navigationUrl, routeDistance, timeAgo } from '@/lib/model';
 import { WeatherAssessment } from '@/components/weather/WeatherAssessment';
+import { useQueries } from '@tanstack/react-query';
+import { getGetCompanionFireDistrictQueryKey, getGetCompanionFireDistrictQueryOptions } from '@workspace/api-client-react';
+import { routeSamples } from '@/lib/weather-geometry';
+import { coverageArea, coverageMessage, nswWarningSources, summarizeCoverage } from '@/lib/warning-coverage';
 
 export default function Trips() {
   const c = useColors();
@@ -26,6 +30,15 @@ export default function Trips() {
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const shownRoute = estimate ?? (destination ? null : trip);
+  const coveragePoints = shownRoute ? routeSamples(shownRoute.coordinates) : [];
+  const coverageQueries = useQueries({ queries: coveragePoints.map(point => getGetCompanionFireDistrictQueryOptions(point, {
+    query: { queryKey: getGetCompanionFireDistrictQueryKey(point), staleTime: 5 * 60000, refetchInterval: 5 * 60000, retry: false },
+  })) });
+  const coverage = coveragePoints.map((point, index) => ({
+    ...point, area: coverageArea(coverageQueries[index].isError ? null : coverageQueries[index].data ?? null),
+  }));
+  const coverageSummary = summarizeCoverage(coverage);
+  const coveragePending = coverageQueries.some(query => query.isPending);
   const nearby = shownRoute ? (feed.data?.incidents ?? []).filter(i => routeDistance(i, shownRoute.coordinates) <= 5).sort((a, b) => b.severity - a.severity) : [];
   const rfsFreshness = !feed.data || feed.isError ? 'unavailable' : isStale ? 'stale' : 'current';
   const freshnessLabel = (status?: string) => status === 'current' ? 'CURRENT' : status === 'stale' ? 'STALE' : 'UNAVAILABLE';
@@ -124,23 +137,35 @@ export default function Trips() {
         {tripLocationBusy && <Text style={ui.small}>Requesting location permission…</Text>}
       </View>
       <Diagram coordinates={shownRoute.coordinates} points={[shownRoute.start, shownRoute.destination]} />
-      <Notice>RFS incident coverage is NSW only. Weather is checked separately at query points along this estimate; neither makes an interstate route fully assessed.</Notice>
+      <View style={ui.card} testID="trip-warning-coverage">
+        <Text style={ui.h2}>Warning coverage · NSW sources only</Text>
+        <Text style={ui.text}>{coveragePending ? 'Checking NSW coverage along this route. No coverage assessment yet.' : coverageMessage(coverage)}</Text>
+        <Text style={ui.small}>{nswWarningSources}: NSW only. No equivalent interstate official feeds are connected.</Text>
+        {coverage.map((point, index) => <View key={`${point.latitude},${point.longitude}`} style={{ gap: 3 }}>
+          <Text style={ui.text}>{index === 0 ? 'Start' : index === coverage.length - 1 ? 'Destination' : `Route sample ${index + 1}`} · {point.latitude.toFixed(3)}, {point.longitude.toFixed(3)}</Text>
+          <Text style={ui.small}>{point.area === 'nsw' ? 'NSW · listed sources cover this jurisdiction, subject to freshness and mapping limits' : point.area === 'outside' ? 'Outside NSW · listed sources unsupported here' : 'Coverage unconfirmed · boundary lookup pending or unavailable'}</Text>
+        </View>)}
+        <Text style={ui.small}>Up to five equally spaced points are checked, not every route section or border crossing. Border areas and gaps between points remain unverified. BOM warnings are NSW-wide headlines, not matched warning polygons; fire danger also needs a current district match. Xweather and radar have separate sampling and availability limits below. None of these checks is an all-clear.</Text>
+      </View>
       <View style={ui.spread}><Text style={ui.h2}>{Math.round(shownRoute.distance)} km estimated</Text><Text style={ui.small}>{Math.round(shownRoute.duration)} min · no live traffic</Text></View>
       <Notice>Estimate from the public OSRM routing service, based on OpenStreetMap. Google Maps or Waze may choose a different route. Alertify does not receive their live routes or traffic reports.</Notice>
       <View style={ui.spread}><Text style={ui.h2}>Along this route estimate</Text><Text style={ui.small}>5 km corridor</Text></View>
-       {rfsFreshness !== 'current' ? <Notice error>RFS incident data is {rfsFreshness}. No current RFS assessment can be made.</Notice> : <View style={[ui.card, { paddingVertical: nearby.length ? 0 : 16 }]}>{nearby.length ? nearby.map(i => <IncidentRow key={i.id} incident={i} subtitle={`${i.category} · ${routeDistance(i, shownRoute.coordinates).toFixed(1)} km from estimated route`} />) : <><Text style={ui.h2}>No RFS reports in this corridor</Text><Text style={ui.small}>This is not a safety assessment. Review the separate sampled-weather checks below; road closures, flood areas and live traffic are not fully assessed.</Text></>}</View>}
+       {rfsFreshness !== 'current' ? <Notice error>RFS incident data is {rfsFreshness}. No current RFS assessment can be made.</Notice> : <View style={[ui.card, { paddingVertical: nearby.length ? 0 : 16 }]}>{nearby.length ? nearby.map(i => <IncidentRow key={i.id} incident={i} subtitle={`${i.category} · ${routeDistance(i, shownRoute.coordinates).toFixed(1)} km from estimated route`} />) : <><Text style={ui.h2}>{coveragePending || coverageSummary.status === 'unknown' ? 'RFS route coverage not confirmed' : coverageSummary.status === 'unsupported' ? 'RFS does not assess the checked route areas' : 'No current NSW RFS reports found near the estimate'}</Text><Text style={ui.small}>{coverageSummary.status === 'partial' ? 'Only the NSW portion can be assessed by RFS. ' : ''}An empty result does not verify the interstate sections, unsampled areas or the full corridor. This is not a safety assessment. Review the separate sampled-weather checks below; road closures, flood areas and live traffic are not fully assessed.</Text></>}</View>}
        <View style={ui.card} testID="trip-warning-freshness">
          <Text style={ui.h2}>Warning data freshness</Text>
          <Text style={ui.small}>Stale and unavailable sources are not treated as an all-clear. Only current records qualify for on-device trip alerts.</Text>
          <View style={ui.spread}><Text style={ui.text}>NSW RFS incidents</Text><Text style={ui.label}>{rfsFreshness.toUpperCase()}</Text></View>
          <View style={ui.spread}><Text style={ui.text}>Fire danger ratings</Text><Text style={ui.label}>{freshnessLabel(feeds.data?.fireRatings.freshness?.status ?? (feeds.isError ? 'unavailable' : undefined))}</Text></View>
+         {feeds.isError && <Notice error>Warning feeds could not be refreshed. Any retained data below is not a new assessment.</Notice>}
+         {feeds.data?.fireRatings.error && <Notice error>{feeds.data.fireRatings.error}</Notice>}
          {feeds.data?.sources.map(source => {
            const sourceCurrent = source.freshness?.status === 'current' && ['live', 'partial'].includes(source.status);
            const freshReports = sourceCurrent ? source.reports.filter(report => report.freshness?.status === 'current').length : 0;
            const staleReports = source.reports.filter(report => report.freshness?.status === 'stale').length;
            return <View key={source.id} style={{ gap: 3 }}>
-             <View style={ui.spread}><Text style={ui.text}>{source.name}</Text><Text style={ui.label}>{freshnessLabel(source.freshness?.status)}</Text></View>
-             <Text style={ui.small}>{source.id === 'bom' && sourceCurrent ? `${freshReports} current statewide warnings · not geocoded` : sourceCurrent ? `${freshReports} current records · ${staleReports} stale excluded` : 'No current source assessment; retained records are not used.'}</Text>
+             <View style={ui.spread}><Text style={ui.text}>{source.name}</Text><Text style={ui.label}>{source.status === 'partial' ? 'PARTIAL · ' : ''}{freshnessLabel(source.freshness?.status)}</Text></View>
+             {source.error && <Text style={ui.small}>{source.error}</Text>}
+             <Text style={ui.small}>{source.id === 'bom' && sourceCurrent ? `${freshReports} current NSW-wide warnings · not geocoded` : sourceCurrent ? `${freshReports} current NSW feed records · ${staleReports} stale excluded · not a route-specific count` : 'No current source assessment; retained records are not used.'}</Text>
            </View>;
          })}
          {!feeds.data && <Text style={ui.small}>{feeds.isError ? 'TfNSW, BOM, SES and fire-danger data are unavailable.' : 'Checking TfNSW, BOM, SES and fire-danger data…'}</Text>}

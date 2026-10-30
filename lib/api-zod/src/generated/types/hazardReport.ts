@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { WarningFreshness } from './warningFreshness';
 
 export interface HazardReport {
   id: string;
@@ -13,7 +14,7 @@ export interface HazardReport {
   description: string;
   location: string;
   updatedAt: string;
-  freshness: import('./warningFreshness').WarningFreshness;
+  freshness: WarningFreshness;
   sourceUrl: string;
   /** @nullable */
   latitude: number | null;

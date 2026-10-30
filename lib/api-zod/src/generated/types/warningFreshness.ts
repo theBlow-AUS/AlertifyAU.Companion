@@ -5,14 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-
-export type WarningFreshnessStatus = typeof WarningFreshnessStatus[keyof typeof WarningFreshnessStatus];
-
-export const WarningFreshnessStatus = {
-  current: 'current',
-  stale: 'stale',
-  unavailable: 'unavailable',
-} as const;
+import type { WarningFreshnessStatus } from './warningFreshnessStatus';
 
 export interface WarningFreshness {
   status: WarningFreshnessStatus;

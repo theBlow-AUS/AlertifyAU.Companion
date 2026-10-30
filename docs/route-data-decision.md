@@ -1,5 +1,42 @@
 # Route data decision for trip-risk previews
 
+## Warning coverage is separate from route geometry
+
+OSRM can return routes anywhere in Australia. That does **not** extend the
+Companion's official warning coverage beyond NSW. Its NSW RFS incidents, TfNSW
+Live Hazards, BOM NSW Warnings, NSW SES HazardWatch and fire-danger mapping are
+NSW-only sources; no equivalent official interstate feeds are currently connected.
+
+Trip Watch checks up to five distance-spaced points (including both route ends)
+using the existing NSW council-boundary/district lookup. Each point is identified
+as NSW, outside NSW, or unconfirmed. A known NSW council establishes geographic
+coverage even if its fire rating is unavailable; it does not establish a fresh
+rating. Lookup failure is **unknown**, never proof of being outside NSW or an
+empty warning result. Mixed NSW/outside results are **partial**; all outside
+results are **unsupported at checked points**. All-NSW samples establish coverage
+only at those points, not every border crossing or the complete 5 km corridor.
+Short crossings between samples, border-adjacent areas and unsampled sections
+remain unverified even when both endpoints are in the same state.
+
+The coverage card applies to all five named NSW sources. It remains separate from
+the source-health card, which retains stale/unavailable states, partial source
+layers and outage reasons. A current feed with zero records does not verify an
+unsupported or unknown route area. Route RFS empty states explicitly distinguish
+these cases. Feed-wide record counts are not route-specific counts.
+
+The on-device monitor does not apply unlocated BOM NSW headlines to a scope with
+no confirmed NSW samples. It retains NSW-wide warnings for the NSW part of an
+interstate trip, without claiming the named warning polygon intersects the route.
+Enabled NSW sources do not produce an empty baseline for wholly unsupported or
+unknown scopes, and empty partially covered checks do not confirm clearance.
+Coverage limitations and source-health errors are both returned to the existing
+monitor status display. Fire danger still requires a current matched district.
+
+Xweather and radar have their own point-query, corridor-filtering, freshness and
+availability limits. They do not fill the gap in official interstate warnings.
+The coverage lookup sends route sample coordinates to the same Alertify-backed
+API already used for district matching. This is advisory, not a safety assessment.
+
 **Decision date:** 27 October 2026  
 **Scope:** Route geometry used to estimate which Alertify incidents and warnings are near a planned trip. This does not select or replace the user's navigation app.
 

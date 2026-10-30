@@ -47,6 +47,22 @@ export const WeatherSourceStatus = {
   unavailable: 'unavailable',
 } as const;
 
+export type WarningFreshnessStatus = typeof WarningFreshnessStatus[keyof typeof WarningFreshnessStatus];
+
+
+export const WarningFreshnessStatus = {
+  current: 'current',
+  stale: 'stale',
+  unavailable: 'unavailable',
+} as const;
+
+export interface WarningFreshness {
+  status: WarningFreshnessStatus;
+  maxAgeMinutes: number;
+  /** @nullable */
+  ageMinutes: number | null;
+}
+
 export interface WeatherSource {
   id: WeatherSourceId;
   name: string;
@@ -174,21 +190,6 @@ export const HazardSourceStatus = {
   stale: 'stale',
   unavailable: 'unavailable',
 } as const;
-
-export type WarningFreshnessStatus = typeof WarningFreshnessStatus[keyof typeof WarningFreshnessStatus];
-
-export const WarningFreshnessStatus = {
-  current: 'current',
-  stale: 'stale',
-  unavailable: 'unavailable',
-} as const;
-
-export interface WarningFreshness {
-  status: WarningFreshnessStatus;
-  maxAgeMinutes: number;
-  /** @nullable */
-  ageMinutes: number | null;
-}
 
 export interface HazardSource {
   id: HazardSourceId;

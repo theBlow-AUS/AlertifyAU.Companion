@@ -83,6 +83,7 @@ async function run() {
     '@workspace/api-client-react': client,
     './model': model,
     './weather-geometry': geometry,
+    './warning-coverage': load('lib/warning-coverage.ts', { '@workspace/api-client-react': client }),
   });
   const place = { name: 'Sydney', detail: 'NSW', latitude: -33.86, longitude: 151.2 };
   const settings = model.normalizeSettings({
@@ -236,7 +237,51 @@ async function run() {
   const stale = await collectHazardSnapshots(settings, null);
   assert.equal(stale.snapshots.some(snapshot => snapshot.id === 'watch:home:tfnsw'), false, 'Stale feeds do not advance a false all-clear baseline');
   assert.equal(stale.errors.some(error => /TfNSW/.test(error)), true, 'Unavailable selected source is reported to the user');
+  const coverage = load('lib/warning-coverage.ts', { '@workspace/api-client-react': client });
+  assert.equal(coverage.coverageArea(null), 'unknown');
+  assert.equal(coverage.coverageArea({ status: 'unavailable', lga: null }), 'unknown');
+  assert.equal(coverage.coverageArea({ status: 'stale', lga: 'Sydney' }), 'nsw', 'Geographic coverage is independent of rating freshness');
+  assert.equal(coverage.coverageArea({ status: 'ambiguous', lga: 'Border council' }), 'nsw');
+  for (const [areas, status] of [
+    [[], 'unknown'], [['nsw'], 'nsw'], [['outside'], 'unsupported'],
+    [['nsw', 'outside'], 'partial'], [['nsw', 'unknown'], 'unknown'], [['outside', 'unknown'], 'unknown'],
+  ]) {
+    assert.equal(coverage.summarizeCoverage(areas.map(area => ({ area }))).status, status);
+    assert.ok(coverage.coverageMessage(areas.map(area => ({ area }))).length > 0);
+  }
+  const outsideTrip = { ...trip, start: { ...place, name: 'Melbourne' }, destination: { ...place, name: 'Adelaide' } };
+  client.getCompanionFireDistrict = async () => ({ status: 'outside_nsw', district: null });
+  const outside = await collectHazardSnapshots({ ...settings, watch: false }, outsideTrip);
+  assert.equal(snapshot(outside, 'bom', tripScope), undefined, 'NSW-wide BOM headlines are not applied to a wholly unsupported trip');
+  assert.equal(snapshot(outside, 'fireDanger', tripScope), undefined, 'Unsupported fire danger does not confirm an empty check');
+  assert.ok(outside.errors.some(error => /unsupported/.test(error) && /TfNSW/.test(error) && /RFS/.test(error)), 'All NSW source limits are surfaced');
+  assert.ok(outside.errors.some(error => /TfNSW/.test(error)), 'Coverage does not hide a source outage');
+  client.getCompanionFireDistrict = async () => { throw new Error('Boundary outage'); };
+  const unknown = await collectHazardSnapshots({ ...settings, watch: false }, trip);
+  assert.equal(snapshot(unknown, 'bom', tripScope), undefined, 'Boundary failures are not treated as NSW coverage');
+  assert.ok(unknown.errors.some(error => /unconfirmed/.test(error)));
+  // Use the actual distance-spaced route sampler for the interstate case.
+  const actualGeometry = load('lib/weather-geometry.ts', { './model': model });
+  const interstateCollector = load('lib/hazard-monitor.ts', {
+    '@workspace/api-client-react': client, './model': model,
+    './weather-geometry': actualGeometry, './warning-coverage': coverage,
+  }).collectHazardSnapshots;
+  client.getCompanionFireDistrict = async point => point.latitude < -36.1
+    ? { status: 'outside_nsw', district: null }
+    : { status: 'matched', district: 'Greater Sydney Region' };
+  const interstateTrip = { ...trip, coordinates: [[151.2, -33.86], [144.96, -37.81]] };
+  const interstate = await interstateCollector({ ...settings, watch: false }, interstateTrip);
+  assert.ok(interstate.errors.some(error => /Partial warning coverage/.test(error)));
+  assert.ok(snapshot(interstate, 'bom', tripScope).alerts.length, 'NSW headlines remain relevant to the NSW portion of an interstate route');
+  feeds.sources.find(source => source.id === 'bom').reports = [];
+  const emptyPartial = await interstateCollector({ ...settings, watch: false }, interstateTrip);
+  assert.equal(snapshot(emptyPartial, 'bom', tripScope), undefined, 'A partially covered empty check does not confirm clearance');
+  feeds.sources.find(source => source.id === 'bom').status = 'stale';
+  const partialOutage = await interstateCollector({ ...settings, watch: false }, interstateTrip);
+  assert.ok(partialOutage.errors.some(error => /Partial warning coverage/.test(error)));
+  assert.ok(partialOutage.errors.some(error => /BOM/.test(error)), 'Freshness errors remain alongside geographic gaps');
   console.log('PASS: selected feeds, current-location scope, cross-scope dedupe, source status, zone/trip matching, validated settings, migration opt-ins, inclusive thresholds and no replay after scope changes.');
+  console.log('PASS: NSW/interstate/outside/unknown warning coverage, statewide BOM eligibility, partial empty checks and preserved source outages.');
 }
 
 run().catch(error => { console.error(error); process.exitCode = 1; });
